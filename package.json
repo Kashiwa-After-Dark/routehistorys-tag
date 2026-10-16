@@ -1,0 +1,12 @@
+{
+  "name": "fieldlog",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.150.0"
+  },
+  "private": true
+}
