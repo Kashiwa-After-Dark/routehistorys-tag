@@ -1,14 +1,12 @@
 {
-  // Cloudflare Pages の設定。name がそのまま URL（name.pages.dev）になる
-  "name": "reitaku-fieldlog",
+  "name": "reitaku-yoh",
   "compatibility_date": "2025-09-01",
   "pages_build_output_dir": "./public",
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "fieldlog",
-      // `npx wrangler d1 list` で表示される fieldlog の ID に置き換える
-      "database_id": "REPLACE_WITH_YOUR_DATABASE_ID"
+      "database_id": "ef220a15-176b-48c5-96c3-a465199ef5c9"
     }
   ]
 }
