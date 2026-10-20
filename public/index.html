@@ -1,0 +1,1004 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e6b5c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="観測ログ">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<title>ゼミ観測ログ</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{
+  --bg:#f3f4f1; --surface:#ffffff; --ink:#15201c; --muted:#69736f; --line:#e1e5e2;
+  --accent:#0e6b5c; --accent-ink:#ffffff; --accent-soft:#e2f0ec; --danger:#b4410f;
+  --warn-bg:#fdecc8; --warn-ink:#7a4300;
+  --shadow:0 1px 2px rgba(21,32,28,.05),0 6px 18px rgba(21,32,28,.05);
+  --g-CP:#d6336c; --g-FM:#c26a00; --g-GG:#a33bd1; --g-BG:#2563eb; --g-XG:#0e8aa6; --g-MX:#5f7a12; --g-Q:#64748b;
+  --r:18px; color-scheme:light dark;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#0e1412;--surface:#161f1c;--ink:#e7eeea;--muted:#93a19b;--line:#27322e;
+  --accent:#3db49e;--accent-ink:#04201a;--accent-soft:#1a332d;--warn-bg:#3a2a0e;--warn-ink:#f5c97a;--shadow:none;
+  --g-CP:#f06c97;--g-FM:#f0a33a;--g-GG:#c98af0;--g-BG:#6f9bff;--g-XG:#3cc3df;--g-MX:#a3c446;--g-Q:#93a3b8}
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic UI",sans-serif;font-size:16px;line-height:1.5;min-height:100dvh;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2.5px solid var(--accent);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+
+/* header */
+.top{position:sticky;top:0;z-index:30;display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:calc(env(safe-area-inset-top) + 10px) 16px 10px;
+  background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:saturate(1.4) blur(14px);-webkit-backdrop-filter:saturate(1.4) blur(14px)}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px;letter-spacing:.02em}
+.brand .mark{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
+.pill-demo{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--warn-bg);color:var(--warn-ink)}
+.user-chip{display:flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:4px 12px 4px 4px;font-size:14px;font-weight:600;max-width:55vw}
+.user-chip .av{flex:none;width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-size:12px;font-weight:700;text-transform:uppercase}
+.user-chip span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.net{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);font-weight:600}
+.net i{width:7px;height:7px;border-radius:50%;background:#22a06b}
+.net.off i{background:#d97706}
+.net:not(.off) span{display:none}
+
+main{max-width:620px;margin:0 auto;padding:2px 16px calc(176px + env(safe-area-inset-bottom))}
+.view{display:none}
+.view.active{display:block;animation:in .22s ease}
+@keyframes in{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+
+/* clock */
+.clock{display:flex;align-items:flex-end;justify-content:space-between;padding:6px 2px 14px}
+.clock .t{font-size:46px;font-weight:700;letter-spacing:-.03em;line-height:1}
+.clock .t small{font-size:20px;color:var(--muted);font-weight:600;letter-spacing:0}
+.clock .d{color:var(--muted);font-size:13px;margin-top:6px}
+.geo{flex:none;white-space:nowrap;font-size:12px;color:var(--muted);text-align:right;line-height:1.35}
+.geo b{display:block;color:var(--ink);font-size:13px}
+
+/* cards */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:14px 14px 16px;margin-bottom:12px}
+.card-h{display:flex;align-items:center;justify-content:space-between;margin:0 0 11px;min-height:22px}
+.card-h h2{margin:0;font-size:13px;font-weight:700;color:var(--muted);letter-spacing:.06em}
+.card-h .val{font-size:13px;font-weight:700;color:var(--accent);display:flex;align-items:center;gap:5px}
+.card-h .need{font-size:11px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:99px;padding:1px 8px}
+.card h3{margin:0 0 6px;font-size:16px}
+.muted{color:var(--muted);font-size:13px;margin:0 0 12px}
+
+/* chips */
+.chips{display:grid;gap:8px;grid-template-columns:repeat(var(--cols,4),1fr)}
+.chip{appearance:none;border:1.5px solid var(--line);background:var(--surface);border-radius:13px;min-height:54px;padding:6px 2px;
+  font-weight:700;font-size:17px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;
+  transition:transform .08s ease,background-color .15s,border-color .15s,color .15s;font-variant-numeric:tabular-nums;--c:var(--accent)}
+.chips[style*="--cols:5"] .chip{font-size:15px;letter-spacing:-.02em}
+.chip{white-space:nowrap}
+.chip small{font-size:11px;font-weight:600;color:var(--muted);line-height:1.2}
+.chip .sw{width:8px;height:8px;border-radius:50%;background:var(--c);margin-bottom:3px}
+.chip:active{transform:scale(.95)}
+.chips.grp-chips{grid-template-columns:repeat(3,1fr)}
+.chip.g{min-height:84px;padding:8px 4px;gap:4px;white-space:normal;word-break:keep-all;line-height:1.25;font-size:13px}
+.chip.g .ic{font-size:28px;line-height:1;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif}
+.chip.g[aria-pressed="true"] .ic{filter:drop-shadow(0 1px 2px rgba(0,0,0,.25))}
+.tag .ic{font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;margin-right:3px}
+.chip[aria-pressed="true"]{background:var(--c);border-color:var(--c);color:#fff}
+.chip[aria-pressed="true"] small{color:rgba(255,255,255,.85)}
+.chip[aria-pressed="true"] .sw{background:#fff}
+@media (prefers-color-scheme:dark){.chip[aria-pressed="true"]{color:#0b1210}.chip[aria-pressed="true"] small{color:rgba(0,0,0,.65)}.chip[aria-pressed="true"] .sw{background:#0b1210}}
+
+/* count range */
+.rng{display:grid;grid-template-columns:1fr auto 1fr;align-items:end;gap:6px}
+.rng-col{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0}
+.rng-col .lb{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.08em}
+.stepper{display:flex;align-items:center;gap:4px;width:100%}
+.step{flex:none;width:44px;height:52px;border-radius:13px;border:1.5px solid var(--line);background:var(--surface);font-size:24px;font-weight:500;display:grid;place-items:center;
+  transition:transform .08s;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.step:active{transform:scale(.94)}
+.step:disabled{opacity:.35}
+.count-val{flex:1;min-width:0;text-align:center;font-size:36px;font-weight:700;letter-spacing:-.03em;line-height:1}
+.tilde{font-size:22px;font-weight:700;color:var(--muted);padding-bottom:13px}
+.dual{position:relative;height:36px;margin:16px 0 0}
+.dual .track,.dual .fill{position:absolute;top:50%;height:6px;margin-top:-3px;border-radius:99px}
+.dual .track{left:0;right:0;background:var(--line)}
+.dual .fill{background:var(--accent)}
+.dual input{position:absolute;inset:0;width:100%;height:100%;margin:0;background:none;-webkit-appearance:none;appearance:none;pointer-events:none}
+.dual input::-webkit-slider-runnable-track{background:none;height:36px}
+.dual input::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto;width:28px;height:28px;margin-top:4px;border-radius:50%;background:var(--surface);border:3px solid var(--accent);box-shadow:0 2px 6px rgba(0,0,0,.18);cursor:grab}
+.dual input::-moz-range-track{background:none}
+.dual input::-moz-range-thumb{pointer-events:auto;width:22px;height:22px;border-radius:50%;background:var(--surface);border:3px solid var(--accent);box-shadow:0 2px 6px rgba(0,0,0,.18);cursor:grab}
+.ticks{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);padding:0 9px}
+
+/* note */
+.note-wrap{position:relative}
+textarea{width:100%;min-height:84px;resize:vertical;border:1.5px solid var(--line);border-radius:13px;background:var(--bg);padding:11px 40px 11px 12px;font-size:16px;line-height:1.5}
+textarea:focus{outline:none;border-color:var(--accent);background:var(--surface)}
+.clear{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:50%;border:0;background:var(--line);color:var(--muted);font-size:15px;line-height:1;display:grid;place-items:center}
+.keep{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:var(--muted)}
+.switch{position:relative;width:42px;height:25px;flex:none}
+.switch input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.switch span{position:absolute;inset:0;border-radius:99px;background:var(--line);transition:.2s;pointer-events:none}
+.switch span::after{content:"";position:absolute;top:3px;left:3px;width:19px;height:19px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:.2s}
+.switch input:checked+span{background:var(--accent)}
+.switch input:checked+span::after{transform:translateX(17px)}
+.switch input:focus-visible+span{outline:2.5px solid var(--accent);outline-offset:2px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+
+/* 定型文 */
+.slot{display:grid;grid-template-columns:76px 1fr;gap:6px 10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.slot:first-of-type{border-top:0;padding-top:2px}
+.slot label{font-size:13px;font-weight:700;color:var(--ink)}
+.slot label small{display:block;font-size:10.5px;font-weight:600;color:var(--muted);line-height:1.3}
+.slot input{width:100%;height:44px;border:1.5px solid var(--line);border-radius:12px;background:var(--bg);padding:0 12px;font-size:16px}
+.slot input:focus{outline:none;border-color:var(--accent);background:var(--surface)}
+.sugg{grid-column:2;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.sugg::-webkit-scrollbar{display:none}
+.sugg:empty{display:none}
+.sg{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:5px 11px;font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap}
+.sg.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.preview{margin-top:10px;padding:10px 12px;border-radius:12px;background:var(--accent-soft);color:var(--accent);font-size:14px;font-weight:700;word-break:break-word}
+.preview.empty{background:var(--bg);color:var(--muted);font-weight:600}
+.rule{font-size:12px;color:var(--muted);margin:0 0 6px;line-height:1.5}
+.linkbtn{border:0;background:none;color:var(--muted);font-size:12px;font-weight:700;padding:4px 6px;border-radius:8px}
+.linkbtn:hover{background:var(--bg);color:var(--ink)}
+
+/* 軌跡 */
+.trk{display:flex;align-items:center;gap:12px;padding:12px 12px 12px 14px}
+.trk .ic{flex:none;width:40px;height:40px;border-radius:12px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center}
+.trk .ic svg{width:22px;height:22px}
+.trk .tx{flex:1;min-width:0}
+.trk .tx b{display:block;font-size:15px}
+.trk .tx span{display:block;font-size:12px;color:var(--muted);line-height:1.4}
+.trk .tx b span{display:inline;font-size:inherit;color:inherit}
+.trk .go{flex:none;height:42px;padding:0 16px;border-radius:12px;border:1.5px solid var(--accent);background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:14px}
+.trk.on{border-color:color-mix(in srgb,var(--danger) 45%,var(--line));background:color-mix(in srgb,var(--danger) 6%,var(--surface))}
+.trk.on .ic{background:color-mix(in srgb,var(--danger) 14%,transparent);color:var(--danger)}
+.trk.on .go{background:var(--surface);color:var(--danger);border-color:var(--danger)}
+.rec-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--danger);margin-right:6px;vertical-align:1px;animation:blink 1.4s infinite}
+@keyframes blink{50%{opacity:.25}}
+
+/* save bar */
+.savebar{position:fixed;left:0;right:0;bottom:calc(66px + env(safe-area-inset-bottom));z-index:25;padding:18px 16px 10px;
+  background:linear-gradient(to bottom,transparent,var(--bg) 40%);pointer-events:none}
+.savebar-in{max-width:620px;margin:0 auto;pointer-events:auto}
+.save{width:100%;height:58px;border:0;border-radius:17px;background:var(--accent);color:var(--accent-ink);font-size:17px;font-weight:700;letter-spacing:.04em;
+  display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 8px 22px color-mix(in srgb,var(--accent) 32%,transparent);transition:transform .08s,background-color .2s}
+.save:active{transform:scale(.98)}
+.save:disabled{background:var(--line);color:var(--muted);box-shadow:none;cursor:default}
+.save .hint{font-size:13px;font-weight:600;letter-spacing:0}
+body:not([data-view="input"]) .savebar{display:none}
+
+/* tabbar */
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;justify-content:center;background:color-mix(in srgb,var(--surface) 92%,transparent);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+.tabbar button{flex:1;max-width:190px;height:66px;border:0;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:11px;font-weight:700;color:var(--muted);position:relative}
+.tabbar button.on{color:var(--accent)}
+.tabbar svg{width:25px;height:25px}
+.tabbar .badge{position:absolute;top:9px;left:calc(50% + 8px);min-width:18px;height:18px;padding:0 5px;border-radius:99px;background:var(--accent);color:var(--accent-ink);font-size:10px;line-height:18px}
+
+/* feed */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:15px;padding:11px 12px}
+.stat b{display:block;font-size:24px;line-height:1.15;letter-spacing:-.02em}
+.stat span{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.04em}
+.filters{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.seg{display:inline-flex;background:var(--line);border-radius:12px;padding:3px}
+.seg button{border:0;background:none;border-radius:9px;padding:7px 12px;font-size:13px;font-weight:700;color:var(--muted)}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.select{appearance:none;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:7px 30px 7px 12px;font-size:13px;font-weight:700;
+  background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 15px) 50%,calc(100% - 10px) 50%;background-size:5px 5px;background-repeat:no-repeat}
+.day{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin:16px 4px 8px}
+.feed{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.rec{display:flex;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px 10px 12px 12px;position:relative;border-left:4px solid var(--c,var(--line))}
+.rec-time{flex:none;width:68px}
+.rec-time b{display:block;font-size:17px;letter-spacing:-.01em}
+.rec-time small{font-size:11px;color:var(--muted)}
+.rec-body{flex:1;min-width:0}
+.tags{display:flex;flex-wrap:wrap;gap:5px}
+.tag{font-size:12px;font-weight:700;padding:2px 8px;border-radius:7px;background:var(--bg);border:1px solid var(--line)}
+.tag.grp{background:var(--c);border-color:var(--c);color:#fff}
+.tag.cnt{background:var(--accent-soft);border-color:transparent;color:var(--accent)}
+.rec .note{margin:7px 0 0;font-size:14px;line-height:1.5;word-break:break-word}
+.meta{margin-top:6px;font-size:11.5px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 10px;font-weight:600}
+.meta .pend{color:var(--warn-ink);background:var(--warn-bg);padding:0 6px;border-radius:5px}
+.meta .ok{color:var(--accent)}
+.del{flex:none;align-self:flex-start;width:32px;height:32px;border:0;border-radius:10px;background:none;color:var(--muted);display:grid;place-items:center}
+.del:hover{background:var(--bg);color:var(--danger)}
+.del svg{width:17px;height:17px}
+.empty{text-align:center;color:var(--muted);padding:48px 16px;font-size:14px}
+.empty b{display:block;color:var(--ink);font-size:16px;margin-bottom:4px}
+
+/* map */
+#map{height:min(52vh,440px);border-radius:var(--r);border:1px solid var(--line);margin-bottom:12px;background:var(--line);z-index:1}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;font-weight:700;color:var(--muted);margin:-4px 2px 12px}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:0}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:0 16px;border-radius:13px;border:1.5px solid var(--line);background:var(--surface);font-weight:700;font-size:15px;width:100%}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn:disabled{opacity:.45;cursor:default}
+.btn+.btn{margin-top:8px}
+.file-btn{position:relative;overflow:hidden}
+.file-btn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.gpx-list{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+.gpx{border:1px solid var(--line);border-radius:13px;padding:10px 12px;background:var(--bg)}
+.gpx .n{font-weight:700;font-size:14px;word-break:break-all}
+.gpx .s{font-size:12px;color:var(--muted);margin:2px 0 8px}
+.gpx label{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--muted)}
+.gpx .select{flex:1;font-size:14px}
+.gap-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:4px 0 12px;font-size:13px;font-weight:600;color:var(--muted)}
+.result{margin-top:12px;display:flex;flex-direction:column;gap:6px}
+.result div{font-size:13px;background:var(--accent-soft);color:var(--accent);border-radius:10px;padding:8px 11px;font-weight:600}
+.result div.bad{background:var(--warn-bg);color:var(--warn-ink)}
+
+/* dialog + toast + banner */
+dialog{border:0;border-radius:22px;padding:0;width:min(92vw,400px);background:var(--surface);color:var(--ink);box-shadow:0 20px 60px rgba(0,0,0,.25)}
+dialog::backdrop{background:rgba(10,18,15,.45);backdrop-filter:blur(3px)}
+.dlg{padding:22px 20px 18px}
+.dlg h2{margin:0 0 4px;font-size:19px}
+.dlg p{margin:0 0 16px;font-size:13px;color:var(--muted)}
+.input{width:100%;height:50px;border:1.5px solid var(--line);border-radius:13px;background:var(--bg);padding:0 14px;font-size:17px;font-weight:600}
+.input:focus{outline:none;border-color:var(--accent);background:var(--surface)}
+.dlg .btn{margin-top:14px}
+.name-warn{margin-top:12px;padding:10px 12px;border-radius:12px;background:var(--warn-bg);color:var(--warn-ink);font-size:13px;font-weight:600;line-height:1.5}
+.name-warn[hidden]{display:none}
+.toast{position:fixed;left:50%;bottom:calc(146px + env(safe-area-inset-bottom));transform:translate(-50%,20px);opacity:0;pointer-events:none;z-index:50;
+  display:flex;align-items:center;gap:14px;background:var(--ink);color:var(--bg);border-radius:14px;padding:11px 12px 11px 16px;font-size:14px;font-weight:600;transition:.25s;white-space:nowrap;box-shadow:0 10px 30px rgba(0,0,0,.2)}
+.toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.toast button{border:0;background:color-mix(in srgb,var(--bg) 18%,transparent);color:var(--bg);font-weight:700;font-size:13px;border-radius:9px;padding:6px 10px}
+.toast button[hidden]{display:none}
+.banner{margin:0 0 12px;padding:10px 12px;border-radius:13px;background:var(--warn-bg);color:var(--warn-ink);font-size:13px;font-weight:600}
+.banner[hidden]{display:none}
+.leaflet-popup-content{font-family:inherit;font-size:13px;line-height:1.5;margin:10px 12px}
+@media (min-width:900px){main{max-width:760px}}
+</style>
+</head>
+<body data-view="input">
+
+<header class="top">
+  <div class="brand"><span class="mark"></span>ゼミ観測ログ<span id="demoPill" class="pill-demo" hidden>デモ</span></div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <span id="net" class="net"><i></i><span>オンライン</span></span>
+    <button id="userChip" class="user-chip" type="button" aria-label="名前を変更"><span class="av" id="userAv">?</span><span id="userName">未設定</span></button>
+  </div>
+</header>
+
+<main>
+  <div id="banner" class="banner" hidden></div>
+
+  <!-- 入力 -->
+  <section id="view-input" class="view active" aria-label="入力">
+    <div class="clock">
+      <div>
+        <div class="t num" id="clockT">--:--<small>:--</small></div>
+        <div class="d" id="clockD">「記録する」を押した瞬間の時刻を保存</div>
+      </div>
+    </div>
+    <div class="card trk" id="trkCard">
+      <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"/></svg></div>
+      <div class="tx"><b>ルートヒストリー</b><span>観測の開始時に記録を始め、終わったらGPXを書き出して提出</span></div>
+      <button class="go" id="trkBtn" type="button">開く</button>
+    </div>
+    <div id="fields"></div>
+
+    <div class="card">
+      <div class="card-h"><h2>人数</h2><span class="val num" id="countLbl">1人</span></div>
+      <div class="rng">
+        <div class="rng-col"><span class="lb">最小</span>
+          <div class="stepper"><button class="step" type="button" data-k="min" data-d="-1" aria-label="最小を1人減らす">−</button><div class="count-val num" id="minVal">1</div><button class="step" type="button" data-k="min" data-d="1" aria-label="最小を1人増やす">＋</button></div>
+        </div>
+        <div class="tilde">〜</div>
+        <div class="rng-col"><span class="lb">最大</span>
+          <div class="stepper"><button class="step" type="button" data-k="max" data-d="-1" aria-label="最大を1人減らす">−</button><div class="count-val num" id="maxVal">1</div><button class="step" type="button" data-k="max" data-d="1" aria-label="最大を1人増やす">＋</button></div>
+        </div>
+      </div>
+      <div class="dual"><div class="track"></div><div class="fill" id="dualFill"></div>
+        <input type="range" id="rMin" min="1" max="30" step="1" value="1" aria-label="最小人数">
+        <input type="range" id="rMax" min="1" max="30" step="1" value="1" aria-label="最大人数">
+      </div>
+      <div class="ticks num"><span>1</span><span>5</span><span>10</span><span>15</span><span>20</span><span>25</span><span>30</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><h2>定型文（誰・どこ・何してる・感情）</h2><button class="linkbtn" id="noteClear" type="button">クリア</button></div>
+      <p class="rule">名詞や動詞だけで短く（「〜していた」「〜だった」は不要）。どこと感情は具体的に。</p>
+      <div id="slots"></div>
+      <div class="preview empty" id="notePreview">入力すると「誰、どこ、何してる、感情」の形でここに表示されます</div>
+      <label class="keep row" style="justify-content:flex-start">
+        <span class="switch"><input type="checkbox" id="keepNote" checked><span></span></span>
+        記録後も「どこ」を残す（同じ場所で続けて記録するとき便利）
+      </label>
+    </div>
+  </section>
+
+  <!-- 一覧 -->
+  <section id="view-feed" class="view" aria-label="記録一覧">
+    <div class="stats">
+      <div class="stat"><b class="num" id="stN">0</b><span>記録数</span></div>
+      <div class="stat"><b class="num" id="stP">0</b><span>合計人数</span></div>
+      <div class="stat"><b class="num" id="stU">0</b><span>記録した人</span></div>
+    </div>
+    <div class="filters">
+      <div class="seg" id="period" role="group" aria-label="期間">
+        <button data-v="today" class="on" type="button">今日</button><button data-v="week" type="button">7日間</button><button data-v="all" type="button">すべて</button>
+      </div>
+      <div class="seg" id="scope" role="group" aria-label="対象">
+        <button data-v="all" class="on" type="button">全員</button><button data-v="me" type="button">自分</button>
+      </div>
+      <select class="select" id="groupFilter" aria-label="グループで絞り込み"></select>
+    </div>
+    <div id="feedWrap"></div>
+  </section>
+
+  <!-- 地図・GPX -->
+  <section id="view-map" class="view" aria-label="地図とGPX照合">
+    <div id="map"></div>
+    <div class="legend" id="legend"></div>
+    <div class="card">
+      <h3>ルートヒストリーのGPXと照合（予備）</h3>
+      <p class="muted">アプリの「軌跡の記録」を使った記録には位置が自動で付くので、照合は不要です。ルートヒストリーで記録した場合は、GPXの時刻と記録時刻を突き合わせて、記録した瞬間の位置を求めます。</p>
+      <label class="btn file-btn">GPXファイルを選ぶ<input type="file" id="gpxInput" multiple></label>
+      <div class="gpx-list" id="gpxList"></div>
+      <div class="gap-row"><span>許容する時間差</span>
+        <select class="select" id="maxGap"><option value="60">1分以内</option><option value="180">3分以内</option><option value="300" selected>5分以内</option><option value="900">15分以内</option></select>
+      </div>
+      <button class="btn primary" id="matchBtn" type="button" disabled>照合する</button>
+      <div class="result" id="matchResult"></div>
+      <button class="btn" id="shareMatch" type="button" hidden>照合結果と軌跡をみんなのデータに保存</button>
+    </div>
+    <div class="card">
+      <h3>データの書き出し</h3>
+      <p class="muted">全期間の記録をCSVで保存します（Excelでそのまま開けます）。照合済みの位置も列に入ります。</p>
+      <button class="btn" id="csvBtn" type="button">CSVをダウンロード</button>
+    </div>
+  </section>
+</main>
+
+<div class="savebar"><div class="savebar-in">
+  <button class="save" id="saveBtn" type="button" disabled><span id="saveLbl">記録する</span></button>
+</div></div>
+
+<nav class="tabbar" aria-label="画面切り替え">
+  <button data-tab="input" class="on" type="button" aria-current="page">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>入力</button>
+  <button data-tab="feed" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>記録<span class="badge num" id="feedBadge" hidden>0</span></button>
+  <button data-tab="map" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg>地図・GPX</button>
+</nav>
+
+<dialog id="nameDlg">
+  <form class="dlg" method="dialog" id="nameForm">
+    <h2>あなたの名前</h2>
+    <p>ローマ字の短い名前がおすすめです。ルートヒストリーで書き出すGPXのファイル名にも同じ名前を付けると、照合が自動になります。</p>
+    <input class="input" id="nameInput" autocomplete="off" autocapitalize="off" maxlength="40" placeholder="例：yamada" required>
+    <div class="name-warn" id="nameWarn" hidden></div>
+    <button class="btn primary" type="submit" id="nameBtn">はじめる</button>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"><span id="toastMsg"></span><button id="toastUndo" type="button" hidden>取り消す</button></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+<script type="module">
+/* =========================================================
+   Cloudflare Workers 上で動くとサーバー（D1）に保存してみんなで共有。
+   ファイルを直接開いたとき（file://）や URL に ?demo を付けたときは
+   「デモモード」（この端末の中だけに保存）で動きます
+   ========================================================= */
+const DEMO = location.protocol === "file:" || new URLSearchParams(location.search).has("demo");
+
+/* ② タグの設定（変えたら firestore.rules の候補も合わせて変更） */
+const TAGS = {
+  age:    { label: "年齢",     cols: 5, options: [["15-18"],["19-22"],["23-34"],["35-64"],["65+"]] },
+  // [CSVに出力するコード, 画面に表示する言葉, アイコン]
+  group:  { label: "グループ", cols: 3, options: [
+    ["CP", "カップル",           "💑"],
+    ["FM", "家族",               "👨‍👩‍👧"],
+    ["GG", "女の子",             "👭"],
+    ["BG", "男の子",             "👬"],
+    ["XG", "男女",               "👫"],
+    ["MX", "年齢差のあるグループ", "🧓🧒"],
+  ] },
+};
+const COUNT_MIN = 1, COUNT_MAX = 30;
+const GROUP_COLOR = { CP: "var(--g-CP)", FM: "var(--g-FM)", GG: "var(--g-GG)", BG: "var(--g-BG)", XG: "var(--g-XG)", MX: "var(--g-MX)", G: "var(--g-GG)", B: "var(--g-BG)" };
+// 1人のときの自動変換：女の子のグループ→G（女の子1人）、男の子のグループ→B（男の子1人）
+const SOLO = { GG: ["G", "女の子1人", "👧"], BG: ["B", "男の子1人", "👦"] };
+const SOLO_INFO = Object.fromEntries(Object.entries(SOLO).map(([from, [code, label, icon]]) => [code, { label, icon, from }]));
+const effGroup = (g, cmin, cmax) => (cmin === 1 && cmax === 1 && SOLO[g]) ? SOLO[g][0] : g;
+// ボタンは短い名前、記録の表示・CSVでは正式な名前（人数が2人以上のとき）
+const LONG = { GG: "女の子のグループ", BG: "男の子のグループ", XG: "男女混合グループ" };
+const grpInfo = v => { if (SOLO_INFO[v]) return SOLO_INFO[v]; const o = TAGS.group.options.find(x => x[0] === v); return o ? { label: LONG[v] || o[1], icon: o[2] } : { label: v === "?" ? "不明" : v, icon: "" }; };
+const grpText = v => { const g = grpInfo(v); return (g.icon ? g.icon + " " : "") + g.label; };
+const grpTag = v => { const g = grpInfo(v); return `${g.icon ? `<span class="ic">${g.icon}</span>` : ""}${esc(g.label)}`; };
+
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const pad = (n, l = 2) => String(n).padStart(l, "0");
+const hms = ms => { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
+const msec = ms => pad(new Date(ms).getMilliseconds(), 3);
+const WD = "日月火水木金土";
+const ymd = ms => { const d = new Date(ms); return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${WD[d.getDay()]}）`; };
+const dayKey = ms => { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
+function localISO(ms){ const d = new Date(ms), o = -d.getTimezoneOffset(), a = Math.abs(o);
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(),3)}${o>=0?"+":"-"}${pad(Math.floor(a/60))}:${pad(a%60)}`; }
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const ls = { get(k, d=null){ try { const v = localStorage.getItem(k); return v ?? d; } catch { return d; } },
+             set(k, v){ try { localStorage.setItem(k, v); } catch {} } };
+const optLabel = (key, v) => { const o = TAGS[key].options.find(x => x[0] === v); if (key === "group") return grpText(v); return o ? o[0] : v; };
+const newId = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 12));
+const fmtCount = r => r.countMin === r.countMax ? `${r.countMin}人` : `${r.countMin}〜${r.countMax}人`;
+const startOfToday = () => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); };
+
+/* ---------- state ---------- */
+const state = {
+  sel: { age: null, group: null }, cmin: 1, cmax: 1, connected: true,
+  user: ls.get("fl-user", ""), uid: null, geo: null, geoErr: null,
+  records: [], period: "today", scope: "all", groupFilter: "",
+  gpx: [], matches: new Map(), unseen: 0, view: "input",
+  tracks: [],
+};
+let store = null, unsub = null;
+
+/* ---------- data stores ---------- */
+function demoStore(){
+  const KEY = "fl-demo-records";
+  let uid = ls.get("fl-demo-uid"); if (!uid) { uid = "local-" + Math.random().toString(36).slice(2, 10); ls.set("fl-demo-uid", uid); }
+  const bc = "BroadcastChannel" in window ? new BroadcastChannel("fieldlog") : null;
+  let mem = null;
+  const read = () => { try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch { return mem || []; } };
+  const subs = new Set();
+  const emit = () => { const all = read(); subs.forEach(s => s.cb(all.filter(r => r.clientTime >= s.since).sort((a,b) => b.clientTime - a.clientTime))); };
+  const write = a => { mem = a; try { localStorage.setItem(KEY, JSON.stringify(a)); } catch {} bc?.postMessage(1); emit(); };
+  if (bc) bc.onmessage = emit;
+  return { uid,
+    add(d){ const id = newId(); write([...read(), { ...d, id, uid, serverTime: Date.now() }]); return id; },
+    subscribe(since, cb){ const s = { since, cb }; subs.add(s); emit(); return () => subs.delete(s); },
+    fetchRange(from, to){ return Promise.resolve(read().filter(r => r.clientTime >= from && r.clientTime <= to)); },
+    saveGpx(items){ const m = new Map(items.map(i => [i.id, i])); write(read().map(r => m.has(r.id) ? { ...r, ...m.get(r.id) } : r)); return Promise.resolve(); },
+    remove(id){ write(read().filter(r => r.id !== id)); return Promise.resolve(); },
+    // 軌跡（デモ：この端末だけ）
+    _tr(){ try { return JSON.parse(localStorage.getItem("fl-demo-tracks") || "{}"); } catch { return {}; } },
+    _trw(o){ try { localStorage.setItem("fl-demo-tracks", JSON.stringify(o)); } catch {} },
+    trackStart(m){ const o = this._tr(); o[m.id] = { ...m, uid, points: [], endedAt: null }; this._trw(o); },
+    trackChunk(id, seq, pts){ const o = this._tr(); if (o[id]) { o[id].points.push(...pts); this._trw(o); } },
+    trackEnd(id, endedAt){ const o = this._tr(); if (o[id]) { o[id].endedAt = endedAt; this._trw(o); } },
+    importTrack(t){ const o = this._tr(), pts = t.points.slice().sort((a, b) => a[0] - b[0]), id = `gpx-${t.user}-${pts[0][0]}`;
+      o[id] = { id, uid: "gpx", user: t.user, startedAt: pts[0][0], endedAt: pts.at(-1)[0], points: pts }; this._trw(o); return Promise.resolve(); },
+    fetchTracks(from, to){ return Promise.resolve(Object.values(this._tr()).filter(x => x.startedAt <= to && (x.endedAt ?? Date.now()) >= from)); },
+  };
+}
+
+// Cloudflare Workers + D1。数秒ごとに「前回から変わった分だけ」取りに行く
+function cloudStore(){
+  let uid = ls.get("fl-uid"); if (!uid) { uid = newId(); ls.set("fl-uid", uid); }
+  const OUT = "fl-outbox";
+  const outbox = () => { try { return JSON.parse(ls.get(OUT, "[]")); } catch { return []; } };
+  const setOutbox = a => ls.set(OUT, JSON.stringify(a));
+  async function api(path, opt = {}){
+    const r = await fetch(path, { ...opt, headers: { "content-type": "application/json" } });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) { const e = new Error(body.error || "HTTP " + r.status); e.code = r.status; throw e; }
+    return body;
+  }
+  const recs = new Map(); let cursor = 0, since = 0, cb = null, timer = null, gen = 0, busy = false;
+  const emit = () => {
+    if (!cb) return;
+    const pend = outbox().filter(r => r.clientTime >= since && !recs.has(r.id)).map(r => ({ ...r, pending: true }));
+    cb([...pend, ...recs.values()].sort((a, b) => b.clientTime - a.clientTime));
+  };
+  // 軌跡の送信待ち（開始・地点・終了）。電波がなくても順番どおりにあとで送る
+  const TQ = "fl-trackq";
+  const tq = () => { try { return JSON.parse(ls.get(TQ, "[]")); } catch { return []; } };
+  const setTq = a => ls.set(TQ, JSON.stringify(a));
+  const enqueue = item => { setTq([...tq(), item]); loop(); };
+  async function flushTracks(){
+    let q = tq();
+    while (q.length) {
+      const it = q[0];
+      try { await api(it.path, { method: "POST", body: JSON.stringify(it.body) }); }
+      catch (e) { if (!(e.code >= 400 && e.code < 500)) break; }   // 通信できない → あとで。内容の誤り → 捨てる
+      q = tq().slice(1); setTq(q);
+    }
+  }
+  async function flush(){
+    await flushTracks();
+    for (const r of outbox()) {
+      try {
+        const res = await api("/api/records", { method: "POST", body: JSON.stringify(r) });
+        if (res.record && res.record.clientTime >= since) recs.set(res.record.id, res.record);
+        setOutbox(outbox().filter(x => x.id !== r.id));
+      } catch (e) {
+        if (e.code === 400) { setOutbox(outbox().filter(x => x.id !== r.id)); toast("保存できない記録がありました（" + e.message + "）"); }
+        else break;   // 通信できない → 次の機会に再送
+      }
+    }
+    emit();
+  }
+  async function poll(){
+    const my = gen;
+    const res = await api(`/api/records?from=${since}` + (cursor ? `&after=${cursor}` : ""));
+    if (my !== gen) return;
+    for (const r of res.records) r.deleted ? recs.delete(r.id) : recs.set(r.id, r);
+    cursor = res.now - 3000;   // 少し重ねて取りこぼしを防ぐ
+    emit();
+  }
+  async function loop(){
+    clearTimeout(timer);
+    if (busy) return; busy = true;
+    try { await flush(); await poll(); setConn(true); }
+    catch (e) { setConn(false); }
+    busy = false;
+    if (cb) timer = setTimeout(loop, document.hidden ? 30000 : 4000);
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && cb) loop(); });
+  addEventListener("online", () => cb && loop());
+  return { uid,
+    add(d){ const r = { ...d, id: newId(), uid }; setOutbox([...outbox(), r]); emit(); loop(); return r.id; },
+    subscribe(s, f){ gen++; since = s; cb = f; cursor = 0; recs.clear(); emit(); loop(); return () => { cb = null; clearTimeout(timer); gen++; }; },
+    async fetchRange(from, to){
+      const res = await api(`/api/records?from=${Math.max(0, Math.floor(from))}&to=${Math.ceil(to)}`);
+      const ids = new Set(res.records.map(r => r.id));
+      return [...res.records, ...outbox().filter(r => r.clientTime >= from && r.clientTime <= to && !ids.has(r.id))];
+    },
+    async saveGpx(items){ await api("/api/records/gpx", { method: "POST", body: JSON.stringify({ items }) }); await poll().catch(() => {}); },
+    async remove(id){
+      if (outbox().some(r => r.id === id)) { setOutbox(outbox().filter(r => r.id !== id)); emit(); return; }
+      await api(`/api/records/${encodeURIComponent(id)}?uid=${encodeURIComponent(uid)}`, { method: "DELETE" });
+      recs.delete(id); emit();
+    },
+    retry: () => loop(),
+    trackStart(m){ enqueue({ path: "/api/tracks", body: { ...m, uid } }); },
+    trackChunk(id, seq, points){ enqueue({ path: `/api/tracks/${id}/chunks`, body: { uid, seq, points } }); },
+    trackEnd(id, endedAt){ enqueue({ path: `/api/tracks/${id}/end`, body: { uid, endedAt } }); },
+    async importTrack(t){ await api("/api/tracks/import", { method: "POST", body: JSON.stringify(t) }); },
+    async fetchTracks(from, to){ const r = await api(`/api/tracks?from=${Math.floor(from)}&to=${Math.ceil(to)}`); return r.tracks; },
+  };
+}
+function setConn(ok){ state.connected = ok; syncNet(); }
+
+/* ---------- UI: tags ---------- */
+function renderFields(){
+  $("#fields").innerHTML = Object.entries(TAGS).map(([key, t]) => `
+    <div class="card" data-key="${key}">
+      <div class="card-h"><h2>${t.label}</h2><span class="need" data-need>未選択</span></div>
+      <div class="chips${key === "group" ? " grp-chips" : ""}" style="--cols:${t.cols}" role="group" aria-label="${t.label}">
+        ${t.options.map(([v, sub, icon]) => {
+          if (key === "group") return `<button type="button" class="chip g" data-v="${esc(v)}" aria-pressed="false" aria-label="${esc(sub)}" style="--c:${GROUP_COLOR[v]}"><span class="ic" aria-hidden="true">${icon}</span><span>${esc(sub).replace("グループ", "<wbr>グループ")}</span></button>`;
+          return `<button type="button" class="chip" data-v="${esc(v)}" aria-pressed="false">${esc(v)}${sub ? `<small>${esc(sub)}</small>` : ""}</button>`;
+        }).join("")}
+      </div>
+    </div>`).join("");
+  $$("#fields .card").forEach(card => {
+    const key = card.dataset.key;
+    card.addEventListener("click", e => {
+      const b = e.target.closest(".chip"); if (!b) return;
+      state.sel[key] = state.sel[key] === b.dataset.v ? null : b.dataset.v;
+      navigator.vibrate?.(8);
+      syncFields();
+    });
+  });
+}
+function syncFields(){
+  $$("#fields .card").forEach(card => {
+    const key = card.dataset.key, v = state.sel[key];
+    card.querySelectorAll(".chip").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === v)));
+    if (key === "group") card.querySelectorAll(".chip").forEach(b => {   // 人数に合わせてアイコンを 1人用／グループ用 に切り替え
+      const code = effGroup(b.dataset.v, state.cmin, state.cmax), ic = b.querySelector(".ic");
+      if (ic) ic.textContent = grpInfo(code).icon;
+    });
+    const n = card.querySelector("[data-need]");
+    if (v) { n.className = "val"; n.textContent = "✓ " + optLabel(key, key === "group" ? effGroup(v, state.cmin, state.cmax) : v); } else { n.className = "need"; n.textContent = "未選択"; }
+  });
+  syncSave();
+}
+function syncCount(){
+  const { cmin, cmax } = state;
+  $("#minVal").textContent = cmin; $("#maxVal").textContent = cmax;
+  $("#countLbl").textContent = fmtCount({ countMin: cmin, countMax: cmax });
+  $("#rMin").value = cmin; $("#rMax").value = cmax;
+  const p = v => (v - COUNT_MIN) / (COUNT_MAX - COUNT_MIN);
+  $("#dualFill").style.left = `calc(14px + ${p(cmin)} * (100% - 28px))`;
+  $("#dualFill").style.width = `calc(${p(cmax) - p(cmin)} * (100% - 28px))`;
+  $("#rMin").style.zIndex = cmin > COUNT_MAX - 5 ? 3 : 1; $("#rMax").style.zIndex = 2;
+  $$(".step").forEach(b => { const v = b.dataset.k === "min" ? cmin : cmax, d = +b.dataset.d;
+    b.disabled = d < 0 ? v <= COUNT_MIN : v >= COUNT_MAX; });
+  if (state.sel.group) syncFields();
+}
+const clampN = v => Math.min(COUNT_MAX, Math.max(COUNT_MIN, v));
+function setMin(v){ state.cmin = clampN(v); if (state.cmin > state.cmax) state.cmax = state.cmin; syncCount(); }
+function setMax(v){ state.cmax = clampN(v); if (state.cmax < state.cmin) state.cmin = state.cmax; syncCount(); }
+function syncSave(){
+  const miss = Object.keys(TAGS).filter(k => !state.sel[k]).map(k => TAGS[k].label);
+  const btn = $("#saveBtn");
+  if (!store) { btn.disabled = true; $("#saveLbl").innerHTML = '<span class="hint">接続中…</span>'; return; }
+  if (!state.user) { btn.disabled = true; $("#saveLbl").innerHTML = '<span class="hint">名前を設定してください</span>'; return; }
+  btn.disabled = miss.length > 0;
+  $("#saveLbl").innerHTML = miss.length ? `<span class="hint">${miss.join("・")}を選んでください</span>` : "記録する";
+}
+
+/* ---------- 定型文（誰・どこ・何してる・感情） ---------- */
+// [キー, 表示名, 説明, 入力例, いつも出す候補]
+const SLOTS = [
+  ["who",     "誰",         "特徴",     "例：ヤンキー",     ["ヤンキー", "欧米人", "警察官"]],
+  ["place",   "どこ",       "居る場所", "例：テラスベンチ", []],
+  ["action",  "何してる",   "していること", "例：雑談",     []],
+  ["feeling", "自分の感情", "感じたこと", "例：居心地悪い", []],
+];
+const cleanWord = s => String(s || "").replace(/[、。,.，．\r\n]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 100);
+const noteVals = () => Object.fromEntries(SLOTS.map(([k]) => [k, cleanWord($("#slot-" + k).value)]));
+function buildNote(){ const v = noteVals(); return SLOTS.some(([k]) => v[k]) ? SLOTS.map(([k]) => v[k]).join("、") : ""; }
+function parseNote(note){
+  const parts = String(note || "").split("、");
+  return parts.length === 4 ? { who: parts[0], place: parts[1], action: parts[2], feeling: parts[3] } : null;
+}
+let suggCache = {};
+function renderSlots(){
+  $("#slots").innerHTML = SLOTS.map(([k, label, sub, ph]) => `
+    <div class="slot"><label for="slot-${k}">${label}<small>${sub}</small></label>
+      <input id="slot-${k}" data-k="${k}" autocomplete="off" enterkeyhint="next" maxlength="100" placeholder="${ph}">
+      <div class="sugg" data-for="${k}"></div></div>`).join("");
+  $$("#slots input").forEach(i => i.addEventListener("input", () => { syncNotePreview(); renderSugg(i.dataset.k); }));
+  $("#slots").addEventListener("click", e => {
+    const b = e.target.closest(".sg"); if (!b) return;
+    const inp = $("#slot-" + b.parentElement.dataset.for);
+    inp.value = inp.value === b.dataset.w ? "" : b.dataset.w;
+    navigator.vibrate?.(6); syncNotePreview(); renderSugg(inp.dataset.k);
+  });
+  SLOTS.forEach(([k]) => renderSugg(k)); syncNotePreview();
+}
+function renderSugg(k){
+  const fixed = SLOTS.find(s => s[0] === k)[4], cur = $("#slot-" + k)?.value.trim();
+  const words = [...new Set([...fixed, ...(suggCache[k] || [])])].slice(0, 12);
+  const el = $(`.sugg[data-for="${k}"]`); if (!el) return;
+  el.innerHTML = words.map(w => `<button type="button" class="sg${w === cur ? " on" : ""}" data-w="${esc(w)}">${esc(w)}</button>`).join("");
+}
+// みんながよく使う単語を候補にする
+function updateSuggestions(){
+  const cnt = Object.fromEntries(SLOTS.map(([k]) => [k, {}]));
+  for (const r of state.records) { const p = parseNote(r.note); if (!p) continue;
+    for (const [k] of SLOTS) if (p[k]) cnt[k][p[k]] = (cnt[k][p[k]] || 0) + 1; }
+  suggCache = Object.fromEntries(SLOTS.map(([k]) => [k, Object.entries(cnt[k]).sort((a, b) => b[1] - a[1]).slice(0, 10).map(e => e[0])]));
+  SLOTS.forEach(([k]) => renderSugg(k));
+}
+function syncNotePreview(){
+  const n = buildNote(), el = $("#notePreview");
+  el.classList.toggle("empty", !n);
+  el.textContent = n ? "➤ " + n : "入力すると「誰、どこ、何してる、感情」の形でここに表示されます";
+}
+function clearNote(keepPlace){
+  SLOTS.forEach(([k]) => { if (!(keepPlace && k === "place")) $("#slot-" + k).value = ""; });
+  SLOTS.forEach(([k]) => renderSugg(k)); syncNotePreview();
+}
+
+/* ---------- clock ---------- */
+function tick(){ const d = new Date();
+  $("#clockT").innerHTML = `${pad(d.getHours())}:${pad(d.getMinutes())}<small>:${pad(d.getSeconds())}</small>`; }
+
+/* ---------- ルートヒストリーを開く ---------- */
+// iPhone：App Storeのページ（インストール済みなら「開く」ボタンからアプリへ）
+// Android：アプリを直接起動（入っていなければGoogle Playへ）
+const RH_IOS = "https://apps.apple.com/jp/app/id1473949280";
+const RH_PLAY = "https://play.google.com/store/apps/details?id=ateow.com.routehistory";
+$("#trkBtn").onclick = () => {
+  const ua = navigator.userAgent;
+  if (/android/i.test(ua)) location.href = `intent://#Intent;package=ateow.com.routehistory;S.browser_fallback_url=${encodeURIComponent(RH_PLAY)};end`;
+  else if (/iphone|ipad|ipod/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) location.href = RH_IOS;
+  else window.open(RH_IOS, "_blank", "noopener");
+};
+
+/* ---------- save ---------- */
+function save(){
+  if ($("#saveBtn").disabled) return;
+  const now = Date.now();
+  const rec = { user: state.user, age: state.sel.age, group: effGroup(state.sel.group, state.cmin, state.cmax), countMin: state.cmin, countMax: state.cmax,
+    note: buildNote(), clientTime: now, clientISO: localISO(now), tzOffsetMin: -new Date(now).getTimezoneOffset() };
+  const id = store.add(rec);
+  navigator.vibrate?.([12, 40, 12]);
+  state.sel = { age: null, group: null }; state.cmin = 1; state.cmax = 1;
+  clearNote($("#keepNote").checked);
+  syncFields(); syncCount();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  toast(`記録しました　${hms(now)}.${msec(now)}`, () => store.remove(id).then(() => toast("取り消しました")));
+}
+
+/* ---------- toast / banner ---------- */
+let toastT;
+function toast(msg, undo){
+  $("#toastMsg").textContent = msg; const u = $("#toastUndo");
+  u.hidden = !undo; u.onclick = () => { $("#toast").classList.remove("show"); undo?.(); };
+  $("#toast").classList.add("show"); clearTimeout(toastT);
+  toastT = setTimeout(() => $("#toast").classList.remove("show"), undo ? 5000 : 2400);
+}
+function banner(msg){ const b = $("#banner"); b.textContent = msg; b.hidden = !msg; }
+
+/* ---------- feed ---------- */
+function periodSince(){ return state.period === "today" ? startOfToday() : state.period === "week" ? startOfToday() - 6 * 864e5 : 0; }
+function subscribe(){
+  unsub?.();
+  let first = true;
+  unsub = store.subscribe(periodSince(), recs => {
+    const before = new Set(state.records.map(r => r.id));
+    const fresh = first ? 0 : recs.filter(r => !before.has(r.id) && r.uid !== state.uid).length;
+    first = false;
+    state.records = recs; updateSuggestions();
+    if (fresh && state.view !== "feed") { state.unseen += fresh; const b = $("#feedBadge"); b.hidden = false; b.textContent = state.unseen; }
+    renderFeed(); if (map) renderMap();
+  });
+}
+function filtered(){
+  return state.records.filter(r => (state.scope === "all" || r.uid === state.uid) && (!state.groupFilter || r.group === state.groupFilter));
+}
+const ICON_DEL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>';
+function renderFeed(){
+  const a = filtered();
+  $("#stN").textContent = a.length;
+  { const lo = a.reduce((s, r) => s + (r.countMin || 0), 0), hi = a.reduce((s, r) => s + (r.countMax || 0), 0);
+    $("#stP").textContent = lo === hi ? lo : `${lo}〜${hi}`; }
+  $("#stU").textContent = new Set(a.map(r => r.user)).size;
+  if (!a.length) { $("#feedWrap").innerHTML = `<div class="empty"><b>まだ記録がありません</b>「入力」から最初の記録を追加しましょう</div>`; return; }
+  let html = "", cur = "";
+  for (const r of a) {
+    const k = dayKey(r.clientTime);
+    if (k !== cur) { if (cur) html += "</ul>"; cur = k; html += `<div class="day">${ymd(r.clientTime)}</div><ul class="feed">`; }
+    const m = state.matches.get(r.id);
+    const gx = r.gpxLat != null || m;
+    html += `<li class="rec" style="--c:${GROUP_COLOR[r.group] || "var(--line)"}">
+      <div class="rec-time num"><b>${hms(r.clientTime)}</b><small>.${msec(r.clientTime)}</small></div>
+      <div class="rec-body">
+        <div class="tags">
+          <span class="tag grp" style="--c:${GROUP_COLOR[r.group] || "var(--g-Q)"}">${grpTag(r.group)}</span>
+          <span class="tag num">${esc(r.age)}</span>
+          <span class="tag cnt num">${fmtCount(r)}</span>
+        </div>
+        ${r.note ? `<p class="note">${esc(r.note)}</p>` : ""}
+        <div class="meta"><span>${esc(r.user)}</span>${r.lat != null ? `<span>端末位置 ±${r.acc ?? "?"}m</span>` : ""}${gx ? '<span class="ok">GPX照合済</span>' : ""}${r.pending ? '<span class="pend">送信待ち</span>' : ""}</div>
+      </div>
+      ${r.uid === state.uid ? `<button class="del" data-del="${r.id}" type="button" aria-label="この記録を削除">${ICON_DEL}</button>` : ""}
+    </li>`;
+  }
+  $("#feedWrap").innerHTML = html + "</ul>";
+}
+$("#feedWrap").addEventListener("click", e => {
+  const b = e.target.closest("[data-del]"); if (!b) return;
+  const r = state.records.find(x => x.id === b.dataset.del);
+  if (r && confirm(`${hms(r.clientTime)} の記録を削除しますか？`)) store.remove(r.id).then(() => toast("削除しました"));
+});
+function renderGroupFilter(){
+  $("#groupFilter").innerHTML = `<option value="">全グループ</option>` + [...TAGS.group.options.map(([v]) => v), ...Object.values(SOLO).map(x => x[0])].map(v => `<option value="${esc(v)}">${esc(grpText(v))}</option>`).join("");
+}
+
+/* ---------- map ---------- */
+let map = null, markerLayer = null, trackLayer = null;
+function initMap(){
+  if (map) return;
+  if (!window.L) { $("#map").innerHTML = '<div class="empty" style="padding-top:30%">地図を読み込めませんでした<br>通信状態を確認してください</div>'; return; }
+  map = L.map("map", { zoomControl: true, attributionControl: true }).setView([35.787, 139.903], 13);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap" }).addTo(map);
+  trackLayer = L.layerGroup().addTo(map); markerLayer = L.layerGroup().addTo(map);
+  renderMap(true);
+}
+const cssVar = v => getComputedStyle(document.documentElement).getPropertyValue(v.replace(/var\((.*)\)/, "$1")).trim();
+function posOf(r){
+  const m = state.matches.get(r.id);
+  if (m) return { lat: m.gpxLat, lng: m.gpxLng, src: "GPX" };
+  if (r.gpxLat != null) return { lat: r.gpxLat, lng: r.gpxLng, src: "GPX" };
+  if (r.lat != null) return { lat: r.lat, lng: r.lng, src: "端末" };
+  return null;
+}
+function renderMap(fit){
+  if (!map) return;
+  markerLayer.clearLayers(); trackLayer.clearLayers();
+  const pts = [];
+  for (const g of state.gpx) {
+    const ll = g.pts.map(p => [p.lat, p.lng]); if (!ll.length) continue;
+    L.polyline(ll, { color: cssVar("--accent"), weight: 3, opacity: .55, dashArray: "6 6" }).addTo(trackLayer); pts.push(...ll);
+  }
+  // アプリで記録した軌跡（自分＝濃く太く、他の人＝薄く）
+  for (const t of state.tracks) {
+    if (state.scope === "me" && t.uid !== state.uid) continue;
+    const ll = t.points.map(p => [p[1], p[2]]); if (ll.length < 2) continue;
+    const mine = t.uid === state.uid;
+    let dist = 0; for (let i = 1; i < t.points.length; i++) dist += distM(t.points[i - 1], t.points[i]);
+    L.polyline(ll, { color: cssVar(mine ? "--accent" : "--g-Q"), weight: mine ? 5 : 3, opacity: mine ? .85 : .5 })
+      .bindPopup(`<b>${esc(t.user)}</b> の軌跡<br>${hms(t.startedAt)}〜${t.endedAt ? hms(t.endedAt) : "記録中"}<br>${fmtDist(dist)}・${t.points.length}地点`)
+      .addTo(trackLayer); pts.push(...ll);
+  }
+  for (const r of filtered()) {
+    const p = posOf(r); if (!p) continue;
+    const col = cssVar(GROUP_COLOR[r.group] || "var(--g-Q)");
+    L.circleMarker([p.lat, p.lng], { radius: 6 + Math.min(r.countMax || 1, 30) / 3, color: "#fff", weight: 2, fillColor: col, fillOpacity: .9 })
+      .bindPopup(`<b>${hms(r.clientTime)}</b>.${msec(r.clientTime)}　${esc(r.user)}<br>${esc(grpText(r.group))}・${esc(r.age)}・${fmtCount(r)}${r.note ? `<br>${esc(r.note)}` : ""}<br><span style="color:#888">位置：${p.src}</span>`)
+      .addTo(markerLayer);
+    pts.push([p.lat, p.lng]);
+  }
+  if (fit && pts.length) map.fitBounds(pts, { padding: [28, 28], maxZoom: 18 });
+}
+function renderLegend(){
+  $("#legend").innerHTML = TAGS.group.options.map(([v]) => `<span><i style="background:${GROUP_COLOR[v]}"></i>${esc(grpText(v))}</span>`).join("") + "<span>円の大きさ＝人数</span><span>線＝軌跡（自分は濃い線）</span>";
+}
+
+/* ---------- GPX ---------- */
+function parseGPX(text){
+  const x = new DOMParser().parseFromString(text, "application/xml");
+  if (x.getElementsByTagName("parsererror").length) throw new Error("GPXを読み込めません");
+  const pts = [...x.getElementsByTagName("trkpt"), ...x.getElementsByTagName("rtept")].map(p => ({
+    lat: +p.getAttribute("lat"), lng: +p.getAttribute("lon"), t: Date.parse(p.getElementsByTagName("time")[0]?.textContent || "") }))
+    .filter(p => isFinite(p.lat) && isFinite(p.lng) && isFinite(p.t)).sort((a, b) => a.t - b.t);
+  return pts;
+}
+function knownUsers(){ return [...new Set([state.user, ...state.records.map(r => r.user)].filter(Boolean))].sort(); }
+$("#gpxInput").addEventListener("change", async e => {
+  for (const f of e.target.files) {
+    try {
+      const pts = parseGPX(await f.text());
+      if (!pts.length) { toast(`${f.name}：時刻付きの地点がありません`); continue; }
+      const stem = f.name.replace(/\.[^.]+$/, "").toLowerCase();
+      const auto = knownUsers().find(u => stem === u.toLowerCase() || stem.startsWith(u.toLowerCase() + "_") || stem.startsWith(u.toLowerCase() + "-"));
+      state.gpx.push({ name: f.name, pts, user: auto || "" });
+    } catch (err) { toast(`${f.name}：${err.message}`); }
+  }
+  e.target.value = ""; renderGpxList(); if (map) renderMap(true);
+});
+function renderGpxList(){
+  const users = knownUsers();
+  $("#gpxList").innerHTML = state.gpx.map((g, i) => {
+    const a = g.pts[0].t, b = g.pts[g.pts.length - 1].t;
+    return `<div class="gpx"><div class="n">${esc(g.name)}</div>
+      <div class="s num">${g.pts.length}地点・${ymd(a)} ${hms(a)}〜${hms(b)}</div>
+      <label>誰の記録？<select class="select" data-gi="${i}"><option value="">選んでください</option>${users.map(u => `<option ${u === g.user ? "selected" : ""}>${esc(u)}</option>`).join("")}</select></label></div>`;
+  }).join("");
+  $$("#gpxList select").forEach(s => s.onchange = () => { state.gpx[+s.dataset.gi].user = s.value; syncMatchBtn(); });
+  syncMatchBtn();
+}
+function syncMatchBtn(){ $("#matchBtn").disabled = !state.gpx.some(g => g.user); }
+function locate(pts, T, gap){
+  let lo = 0, hi = pts.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (pts[m].t < T) lo = m + 1; else hi = m; }
+  const n = pts[lo], p = pts[lo - 1];
+  if (p && n && T - p.t <= gap && n.t - T <= gap) {
+    const k = n.t === p.t ? 0 : (T - p.t) / (n.t - p.t);
+    return { lat: p.lat + (n.lat - p.lat) * k, lng: p.lng + (n.lng - p.lng) * k, diff: Math.min(T - p.t, n.t - T) / 1000, interp: true };
+  }
+  const c = [p, n].filter(Boolean).sort((a, b) => Math.abs(a.t - T) - Math.abs(b.t - T))[0];
+  return c && Math.abs(c.t - T) <= gap ? { lat: c.lat, lng: c.lng, diff: Math.abs(c.t - T) / 1000, interp: false } : null;
+}
+$("#matchBtn").addEventListener("click", async () => {
+  const gap = +$("#maxGap").value * 1000, out = [];
+  $("#matchBtn").disabled = true; state.matches.clear();
+  for (const g of state.gpx.filter(g => g.user)) {
+    const from = g.pts[0].t - gap, to = g.pts[g.pts.length - 1].t + gap;
+    const recs = (await store.fetchRange(from, to)).filter(r => r.user === g.user);
+    let ok = 0, diffSum = 0;
+    for (const r of recs) {
+      const m = locate(g.pts, r.clientTime, gap); if (!m) continue;
+      ok++; diffSum += m.diff;
+      state.matches.set(r.id, { gpxLat: +m.lat.toFixed(7), gpxLng: +m.lng.toFixed(7), gpxDiffSec: +m.diff.toFixed(1), gpxInterp: m.interp, gpxFile: g.name, _rec: r });
+    }
+    out.push(recs.length
+      ? `<div class="${ok ? "" : "bad"}">${esc(g.name)} → ${esc(g.user)}：${recs.length}件中 ${ok}件を照合${ok ? `（平均の時間差 ${(diffSum / ok).toFixed(1)}秒）` : ""}</div>`
+      : `<div class="bad">${esc(g.name)} → ${esc(g.user)}：この時間帯の記録がありません</div>`);
+  }
+  $("#matchResult").innerHTML = out.join(""); $("#shareMatch").hidden = state.matches.size === 0 && !state.gpx.some(g => g.user);
+  $("#matchBtn").disabled = false; renderFeed(); renderMap(true);
+});
+$("#shareMatch").addEventListener("click", async () => {
+  const b = $("#shareMatch"); b.disabled = true;
+  try {
+    await store.saveGpx([...state.matches].map(([id, m]) => { const { _rec, ...p } = m; return { id, ...p }; }));
+    const gs = state.gpx.filter(g => g.user && g.pts.length > 1);
+    for (const g of gs) await store.importTrack({ user: g.user, file: g.name, points: g.pts.map(p => [p.t, p.lat, p.lng]) });
+    toast(`${state.matches.size}件の位置と、軌跡${gs.length}本を保存しました`); b.hidden = true; loadTracks(false);
+  } catch (e) { console.error(e); toast("保存に失敗しました"); }
+  b.disabled = false;
+});
+
+/* ---------- CSV ---------- */
+$("#csvBtn").addEventListener("click", async () => {
+  const all = (await store.fetchRange(0, Date.now() + 864e5)).sort((a, b) => a.clientTime - b.clientTime);
+  const cols = ["id","user","datetime_local","epoch_ms","age","group","gender","count_min","count_max","note","who","place","action","feeling","device_lat","device_lng","device_acc_m","gpx_lat","gpx_lng","gpx_diff_sec","gpx_file","server_time"];
+  const q = v => { const s = v == null ? "" : String(v); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const rows = all.map(r => { const m = state.matches.get(r.id) || r;
+    return [r.id, r.user, localISO(r.clientTime), r.clientTime, r.age, r.group, r.gender, r.countMin, r.countMax, r.note, ...(() => { const p = parseNote(r.note) || {}; return [p.who, p.place, p.action, p.feeling]; })(), r.lat, r.lng, r.acc,
+      m.gpxLat, m.gpxLng, m.gpxDiffSec, m.gpxFile, r.serverTime ? localISO(r.serverTime) : ""].map(q).join(","); });
+  const blob = new Blob(["﻿" + [cols.join(","), ...rows].join("\r\n")], { type: "text/csv" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = `observations_${dayKey(Date.now())}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  toast(`${all.length}件を書き出しました`);
+});
+
+/* ---------- 軌跡の読み込み（地図用） ---------- */
+const Rad = d => d * Math.PI / 180;
+const distM = (a, b) => { const x = Rad(b[2] - a[2]) * Math.cos(Rad((a[1] + b[1]) / 2)), y = Rad(b[1] - a[1]); return Math.sqrt(x * x + y * y) * 6371000; };
+const fmtDist = m => m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(2)} km`;
+async function loadTracks(fit){
+  try { state.tracks = await store.fetchTracks(periodSince(), Date.now() + 864e5); renderMap(fit); } catch (e) { console.warn(e); }
+}
+setInterval(() => { if (state.view === "map" && !document.hidden && store) loadTracks(false); }, 30000);
+
+/* ---------- navigation ---------- */
+function go(view){
+  state.view = view; document.body.dataset.view = view;
+  $$(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + view));
+  $$(".tabbar button").forEach(b => { const on = b.dataset.tab === view; b.classList.toggle("on", on); on ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current"); });
+  $("#toast").classList.remove("show");
+  if (view === "feed") { state.unseen = 0; $("#feedBadge").hidden = true; }
+  if (view === "map") { if (!map) initMap(); else { setTimeout(() => map.invalidateSize(), 50); renderMap(); } if (state.gpx.length) renderGpxList(); loadTracks(true); }
+  window.scrollTo({ top: 0 });
+}
+$$(".tabbar button").forEach(b => b.addEventListener("click", () => go(b.dataset.tab)));
+
+/* ---------- user ---------- */
+function syncUser(){ $("#userName").textContent = state.user || "未設定"; $("#userAv").textContent = (state.user || "?").slice(0, 1); syncSave(); }
+function resetNameWarn(){ nameConfirm = ""; $("#nameWarn").hidden = true; $("#nameBtn").textContent = "はじめる"; }
+let nameConfirm = "";
+function askName(){ $("#nameInput").value = state.user; resetNameWarn(); $("#nameDlg").showModal(); setTimeout(() => $("#nameInput").focus(), 50); }
+$("#nameInput").addEventListener("input", () => { if (nameConfirm) resetNameWarn(); });
+$("#nameForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const v = $("#nameInput").value.trim(); if (!v) return;
+  const accept = () => { state.user = v; ls.set("fl-user", v); syncUser(); $("#nameDlg").close(); store?.retry?.(); };
+  // 名前が変わっていない・デモ・2回目の確認済みならそのまま
+  if (v === state.user || DEMO || nameConfirm === v) return accept();
+  $("#nameBtn").disabled = true;
+  try {
+    const r = await fetch(`/api/names?name=${encodeURIComponent(v)}&uid=${encodeURIComponent(store?.uid || "")}`);
+    const j = r.ok ? await r.json() : { others: 0 };
+    if (j.others > 0) {
+      nameConfirm = v;
+      $("#nameWarn").innerHTML = `「${esc(v)}」はすでに別のスマホで使われています${j.last ? `（最後の記録：${ymd(j.last)} ${hms(j.last).slice(0, 5)}）` : ""}。<br>別の人の名前なら、違う名前にしてください。スマホを替えた本人なら、そのまま進めてOKです。`;
+      $("#nameWarn").hidden = false; $("#nameBtn").textContent = "本人なので、この名前で続ける";
+      $("#nameBtn").disabled = false; return;
+    }
+  } catch {}   // 電波がないときは確認せずに進める
+  $("#nameBtn").disabled = false; accept();
+});
+$("#nameDlg").addEventListener("cancel", e => { if (!state.user) e.preventDefault(); });
+$("#userChip").addEventListener("click", askName);
+
+/* ---------- wiring ---------- */
+// −/＋：タップで1ずつ、長押しで連続
+$$(".step").forEach(b => {
+  let t1, t2;
+  const fire = () => { const d = +b.dataset.d; b.dataset.k === "min" ? setMin(state.cmin + d) : setMax(state.cmax + d); };
+  const stop = () => { clearTimeout(t1); clearInterval(t2); };
+  b.addEventListener("pointerdown", e => { if (b.disabled) return; e.preventDefault(); fire(); navigator.vibrate?.(6); t1 = setTimeout(() => t2 = setInterval(() => { fire(); if (b.disabled) stop(); }, 90), 400); });
+  ["pointerup", "pointerleave", "pointercancel"].forEach(ev => b.addEventListener(ev, stop));
+  b.addEventListener("click", e => { if (e.detail === 0) fire(); });   // キーボード操作
+  b.addEventListener("contextmenu", e => e.preventDefault());
+});
+$("#rMin").oninput = e => setMin(+e.target.value);
+$("#rMax").oninput = e => setMax(+e.target.value);
+$("#noteClear").onclick = () => { clearNote(false); $("#slot-who").focus(); };
+$("#keepNote").checked = ls.get("fl-keep", "1") === "1";
+$("#keepNote").onchange = e => ls.set("fl-keep", e.target.checked ? "1" : "0");
+$("#saveBtn").onclick = save;
+const segs = (id, key, after) => $(id).addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return;
+  $(id).querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); state[key] = b.dataset.v; after(); });
+segs("#period", "period", subscribe);
+segs("#scope", "scope", () => { renderFeed(); renderMap(); });
+$("#groupFilter").onchange = e => { state.groupFilter = e.target.value; renderFeed(); renderMap(); };
+function syncNet(){ const on = navigator.onLine && state.connected; $("#net").classList.toggle("off", !on);
+  $("#net span").textContent = on ? "" : (navigator.onLine ? "未接続" : "オフライン"); }
+addEventListener("online", syncNet);
+$("#net").addEventListener("click", () => store?.retry?.()); addEventListener("offline", syncNet);
+
+/* ---------- boot ---------- */
+renderFields(); renderSlots(); renderGroupFilter(); renderLegend(); syncCount(); syncFields(); syncUser(); syncNet();
+tick(); setInterval(tick, 250);
+if (!state.user) askName();
+$("#demoPill").hidden = !DEMO;
+if (DEMO) banner("デモモード：データはこの端末の中だけに保存されます。Cloudflareに公開するとみんなで共有できます。");
+try {
+  store = DEMO ? demoStore() : cloudStore();
+  state.uid = store.uid; syncSave(); subscribe();
+} catch (e) {
+  console.error(e); banner("サーバーに接続できませんでした。電波の良い場所でページを再読み込みしてください。（" + (e.code || e.message) + "）");
+}
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>

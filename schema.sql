@@ -20,3 +20,15 @@ CREATE TABLE IF NOT EXISTS records (
 );
 CREATE INDEX IF NOT EXISTS idx_records_client_time ON records (client_time);
 CREATE INDEX IF NOT EXISTS idx_records_updated_at  ON records (updated_at);
+
+-- 軌跡（アプリの「開始」「終了」ボタンで記録）。サーバーが最初に使うときにも自動で作られます
+CREATE TABLE IF NOT EXISTS tracks (
+  id TEXT PRIMARY KEY, uid TEXT NOT NULL, user TEXT NOT NULL,
+  started_at INTEGER NOT NULL, ended_at INTEGER, updated_at INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0
+);
+-- 地点はまとめて（チャンクごとに）JSONで保存： [[時刻ms, 緯度, 経度, 誤差m], ...]
+CREATE TABLE IF NOT EXISTS track_chunks (
+  track_id TEXT NOT NULL, seq INTEGER NOT NULL, t0 INTEGER, t1 INTEGER, n INTEGER, points TEXT NOT NULL,
+  PRIMARY KEY (track_id, seq)
+);
+CREATE INDEX IF NOT EXISTS idx_tracks_started ON tracks (started_at);

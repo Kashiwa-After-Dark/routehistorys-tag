@@ -1,0 +1,672 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>観測ログ 管理</title>
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{
+  --bg:#f3f4f1; --surface:#ffffff; --surface-2:#f8f9f7; --ink:#15201c; --ink-2:#52514e; --muted:#69736f; --line:#e1e5e2; --grid:#eceeeb;
+  --accent:#0e6b5c; --accent-ink:#fff; --accent-soft:#e2f0ec; --accent-faint:#b9dcd3;
+  --danger:#b4410f; --warn-bg:#fdecc8; --warn-ink:#7a4300;
+  --seq-1:#e6f2ef; --seq-2:#b9dcd3; --seq-3:#7fbfb0; --seq-4:#3f9785; --seq-5:#0e6b5c;
+  --g-CP:#d6336c; --g-FM:#c26a00; --g-GG:#a33bd1; --g-BG:#2563eb; --g-XG:#0e8aa6; --g-MX:#5f7a12; --g-Q:#64748b;
+  --r:16px; color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e1412; --surface:#161f1c; --surface-2:#1b2522; --ink:#e7eeea; --ink-2:#c3c9c5; --muted:#93a19b; --line:#27322e; --grid:#222c29;
+    --accent:#3db49e; --accent-ink:#04201a; --accent-soft:#1a332d; --accent-faint:#24574c;
+    --warn-bg:#3a2a0e; --warn-ink:#f5c97a;
+    --seq-1:#18302a; --seq-2:#1f4c41; --seq-3:#2a7362; --seq-4:#36a088; --seq-5:#5fd1b8;
+    --g-CP:#f06c97; --g-FM:#f0a33a; --g-GG:#c98af0; --g-BG:#6f9bff; --g-XG:#3cc3df; --g-MX:#a3c446; --g-Q:#93a3b8;
+    color-scheme:dark;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic UI",sans-serif;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2.5px solid var(--accent);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+.emo{font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif}
+
+header{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.bar{max-width:1240px;margin:0 auto;padding:12px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px;margin-right:auto}
+.brand .mark{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
+.brand small{font-weight:600;color:var(--muted);font-size:12px}
+.filters{max-width:1240px;margin:0 auto;padding:0 16px 12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.seg{display:inline-flex;background:var(--line);border-radius:10px;padding:3px}
+.seg button{border:0;background:none;border-radius:8px;padding:6px 11px;font-size:13px;font-weight:700;color:var(--muted)}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.sel,.inp{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:6px 10px;font-size:13px;font-weight:600;height:34px}
+.sel{appearance:none;padding-right:28px;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 14px) 50%,calc(100% - 9px) 50%;background-size:5px 5px;background-repeat:no-repeat}
+.inp[type=date]{padding:4px 8px}
+.btn{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-weight:700;font-size:13px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn svg{width:15px;height:15px}
+.live{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);font-weight:600}
+.live i{width:7px;height:7px;border-radius:50%;background:#22a06b}
+.live.off i{background:#d97706}
+.custom{display:none;gap:6px;align-items:center}
+.custom.show{display:inline-flex}
+
+main{max-width:1240px;margin:0 auto;padding:16px 16px 60px}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.kpi span{display:block;font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.04em}
+.kpi b{display:block;font-size:26px;letter-spacing:-.02em;line-height:1.2;margin-top:2px}
+.kpi small{font-size:12px;color:var(--muted);font-weight:600}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px 16px;min-width:0}
+.card.wide{grid-column:1/-1}
+.card h2{margin:0;font-size:14px;font-weight:700}
+.card .sub{margin:2px 0 12px;font-size:12px;color:var(--muted)}
+.card-h{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--ink-2);font-weight:600}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.chart{width:100%;position:relative}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart text{fill:var(--muted);font-size:11px}
+.chart .lbl{fill:var(--ink-2);font-size:12px;font-weight:600}
+.chart .val{fill:var(--ink);font-size:12px;font-weight:700}
+.empty{color:var(--muted);text-align:center;padding:36px 8px;font-size:13px}
+.tip{position:fixed;z-index:50;pointer-events:none;background:var(--ink);color:var(--bg);border-radius:10px;padding:8px 10px;font-size:12px;line-height:1.5;box-shadow:0 8px 24px rgba(0,0,0,.18);opacity:0;transform:translateY(4px);transition:opacity .12s,transform .12s;max-width:260px}
+.tip.show{opacity:1;transform:none}
+.tip b{font-size:13px}
+
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:7px 8px;text-align:left;border-bottom:1px solid var(--grid);vertical-align:top}
+th{font-size:12px;color:var(--muted);font-weight:700;white-space:nowrap;position:sticky;top:0;background:var(--surface)}
+td.r,th.r{text-align:right}
+tbody tr:hover{background:var(--surface-2)}
+.xt td,.xt th{text-align:center}
+.xt th:first-child,.xt td:first-child{text-align:left;white-space:nowrap}
+.xt td.c{font-weight:700;border-radius:6px}
+.scroll{overflow:auto;max-height:560px;border-radius:10px}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:7px;font-size:12px;font-weight:700;color:#fff;background:var(--c);white-space:nowrap}
+.tag{display:inline-block;padding:0 6px;border-radius:6px;font-size:11.5px;font-weight:700;background:var(--accent-soft);color:var(--accent);white-space:nowrap}
+.tag.warn{background:var(--warn-bg);color:var(--warn-ink)}
+.del{border:0;background:none;color:var(--muted);border-radius:8px;width:28px;height:28px;display:grid;place-items:center}
+.del:hover{background:var(--surface-2);color:var(--danger)}
+.del svg{width:15px;height:15px}
+.note{max-width:340px;word-break:break-word;color:var(--ink-2)}
+.tbl-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#map{height:420px;border-radius:12px;border:1px solid var(--line);background:var(--grid);z-index:1}
+.more{margin-top:10px;text-align:center}
+.banner{max-width:1240px;margin:12px auto 0;padding:10px 14px;border-radius:12px;background:var(--warn-bg);color:var(--warn-ink);font-weight:600;font-size:13px}
+.banner[hidden]{display:none}
+.gate{position:fixed;inset:0;z-index:100;background:var(--bg);display:grid;place-items:center;padding:16px}
+.gate[hidden]{display:none}
+.gate form{width:min(100%,380px);background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:26px 22px 22px;box-shadow:0 12px 40px rgba(0,0,0,.08)}
+.gate h1{margin:0 0 4px;font-size:19px;display:flex;align-items:center;gap:9px}
+.gate h1 .mark{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
+.gate p{margin:0 0 16px;color:var(--muted);font-size:13px}
+.gate input{width:100%;height:48px;border:1.5px solid var(--line);border-radius:12px;background:var(--surface-2);padding:0 14px;font-size:16px}
+.gate input:focus{outline:none;border-color:var(--accent);background:var(--surface)}
+.gate .btn{width:100%;justify-content:center;height:46px;margin-top:12px;font-size:15px}
+.gate .err{margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--warn-bg);color:var(--warn-ink);font-size:13px;font-weight:600}
+.gate .err[hidden]{display:none}
+body.locked header,body.locked main,body.locked .banner{visibility:hidden}
+.gpxf{display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
+.gpxf .n{font-weight:700;word-break:break-all}
+.gpxf .s{grid-column:1/-1;font-size:12px;color:var(--muted)}
+.gpxf .r{grid-column:1/-1;font-size:12px;font-weight:700;color:var(--accent)}
+.gpxf .r.bad{color:var(--warn-ink)}
+.gpx-list{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+.gpx-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.file-btn{position:relative;overflow:hidden}
+.file-btn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+@media (max-width:900px){header{position:static}.grid{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}.kpi:last-child{grid-column:1/-1}}
+</style>
+</head>
+<body class="locked">
+<div class="gate" id="gate">
+  <form id="gateForm">
+    <h1><span class="mark"></span>管理ページ</h1>
+    <p>ゼミ観測ログの集計・管理用です。管理用パスワードを入力してください。</p>
+    <input id="gateKey" type="password" autocomplete="current-password" placeholder="管理用パスワード" aria-label="管理用パスワード" required>
+    <div class="err" id="gateErr" hidden></div>
+    <button class="btn primary" type="submit" id="gateBtn">開く</button>
+  </form>
+</div>
+<header>
+  <div class="bar">
+    <div class="brand"><span class="mark"></span>ゼミ観測ログ <small>管理・集計</small></div>
+    <span class="live" id="live"><i></i><span id="liveTxt">更新待ち</span></span>
+    <button class="btn" id="logout" type="button">ログアウト</button>
+    <button class="btn" id="reload" type="button" title="今すぐ更新"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>更新</button>
+    <button class="btn" id="gpxOut" type="button" title="表示中の条件の軌跡をGPXで保存"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"/></svg>軌跡GPX</button>
+    <button class="btn primary" id="csv" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>CSV（表示中の条件）</button>
+  </div>
+  <div class="filters">
+    <div class="seg" id="range" role="group" aria-label="期間">
+      <button data-v="today" class="on" type="button">今日</button><button data-v="7" type="button">7日間</button><button data-v="30" type="button">30日間</button><button data-v="all" type="button">全期間</button><button data-v="custom" type="button">指定</button>
+    </div>
+    <span class="custom" id="custom"><input class="inp" type="date" id="dFrom" aria-label="開始日">〜<input class="inp" type="date" id="dTo" aria-label="終了日"></span>
+    <select class="sel" id="fUser" aria-label="メンバー"></select>
+    <select class="sel" id="fGroup" aria-label="グループ"></select>
+    <select class="sel" id="fAge" aria-label="年齢"></select>
+  </div>
+</header>
+<div class="banner" id="banner" hidden></div>
+
+<main>
+  <section class="kpis" aria-label="概要">
+    <div class="kpi"><span>記録数</span><b class="num" id="kN">–</b><small id="kNs">&nbsp;</small></div>
+    <div class="kpi"><span>観測した人数</span><b class="num" id="kP">–</b><small>最小〜最大の合計</small></div>
+    <div class="kpi"><span>記録したメンバー</span><b class="num" id="kU">–</b><small id="kUs">&nbsp;</small></div>
+    <div class="kpi"><span>位置がわかる記録</span><b class="num" id="kG">–</b><small id="kGs">&nbsp;</small></div>
+    <div class="kpi"><span>最新の記録</span><b class="num" id="kL">–</b><small id="kLs">&nbsp;</small></div>
+  </section>
+
+  <div class="grid">
+    <section class="card wide" id="merge">
+      <div class="card-h">
+        <div><h2>ルートヒストリーのデータを結合</h2><p class="sub">メンバーから集めたGPXを読み込むと、記録した瞬間の位置を求めて記録に結びつけ、軌跡も保存します（ファイル名をメンバー名にすると自動で割り当て）</p></div>
+        <div class="gpx-tools">
+          <label class="btn file-btn">GPXファイルを選ぶ（複数可）<input type="file" id="gpxIn" multiple accept=".gpx,application/gpx+xml,application/xml,text/xml"></label>
+          <select class="sel" id="gpxGap" aria-label="許容する時間差"><option value="60">時間差 1分以内</option><option value="180">3分以内</option><option value="300" selected>5分以内</option><option value="900">15分以内</option></select>
+          <button class="btn" id="gpxRun" type="button" disabled>結合する</button>
+          <button class="btn primary" id="gpxSave" type="button" hidden>結合結果を保存</button>
+        </div>
+      </div>
+      <div class="gpx-list" id="gpxList"></div>
+    </section>
+
+    <section class="card wide">
+      <div class="card-h">
+        <div><h2>時間帯ごとの観測人数</h2><p class="sub" id="timeSub">濃い部分＝最小人数の合計、薄い部分＝最大人数までの幅</p></div>
+        <div class="legend"><span><i style="background:var(--accent)"></i>最小人数</span><span><i style="background:var(--accent-faint)"></i>最大人数までの幅</span></div>
+      </div>
+      <div class="chart" id="cTime"></div>
+    </section>
+
+    <section class="card">
+      <h2>グループ別</h2><p class="sub">記録数（バーの長さ）と観測人数</p>
+      <div class="chart" id="cGroup"></div>
+    </section>
+    <section class="card">
+      <h2>年齢層別</h2><p class="sub">記録数（バーの長さ）と観測人数</p>
+      <div class="chart" id="cAge"></div>
+    </section>
+
+    <section class="card wide">
+      <h2>グループ × 年齢層</h2><p class="sub">記録数のクロス集計（色が濃いほど多い）</p>
+      <div class="scroll" id="xtab"></div>
+    </section>
+
+    <section class="card">
+      <h2>メンバー別</h2><p class="sub">誰がどれだけ記録したか・位置と軌跡の状況</p>
+      <div class="scroll" id="members"></div>
+    </section>
+    <section class="card">
+      <div class="card-h"><div><h2>地図</h2><p class="sub">位置がわかる記録（円の大きさ＝人数）と、アプリで記録した軌跡（線）</p></div></div>
+      <div id="map"></div>
+      <div class="legend" id="mapLegend" style="margin-top:10px"></div>
+    </section>
+
+    <section class="card wide">
+      <div class="card-h">
+        <div><h2>記録一覧</h2><p class="sub" id="listSub">&nbsp;</p></div>
+        <div class="tbl-tools">
+          <input class="inp" id="q" type="search" placeholder="メモ・名前で検索" aria-label="検索">
+        </div>
+      </div>
+      <div class="scroll" id="list"></div>
+      <div class="more"><button class="btn" id="moreBtn" type="button" hidden>さらに表示</button></div>
+    </section>
+  </div>
+</main>
+<div class="tip" id="tip" role="tooltip"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ---------- 設定（アプリ本体と合わせる） ---------- */
+const GROUPS = [
+  ["CP", "カップル", "💑", "--g-CP"], ["FM", "家族", "👨‍👩‍👧", "--g-FM"],
+  ["GG", "女の子のグループ", "👭", "--g-GG"], ["G", "女の子1人", "👧", "--g-GG"],
+  ["XG", "男女混合グループ", "👫", "--g-XG"],
+  ["BG", "男の子のグループ", "👬", "--g-BG"], ["B", "男の子1人", "👦", "--g-BG"],
+  ["MX", "年齢差のあるグループ", "🧓🧒", "--g-MX"],
+];
+const AGES = ["15-18", "19-22", "23-34", "35-64", "65+"];
+const G = Object.fromEntries(GROUPS.map(([c, l, i, v]) => [c, { code: c, label: l, icon: i, color: `var(${v})` }]));
+const gInfo = c => G[c] || { code: c, label: c === "?" ? "不明" : c, icon: "", color: "var(--g-Q)" };
+
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const pad = n => String(n).padStart(2, "0");
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const hm = ms => { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const hms = ms => { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
+const WD = "日月火水木金土";
+const md = ms => { const d = new Date(ms); return `${d.getMonth() + 1}/${d.getDate()}（${WD[d.getDay()]}）`; };
+const ymd = ms => { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+const startOfDay = ms => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); };
+const range = (lo, hi) => lo === hi ? `${lo}` : `${lo}〜${hi}`;
+const cssv = v => getComputedStyle(document.documentElement).getPropertyValue(v.replace(/var\((.*)\)/, "$1")).trim();
+function localISO(ms){ const d = new Date(ms), o = -d.getTimezoneOffset(), a = Math.abs(o);
+  return `${ymd(ms)}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${String(d.getMilliseconds()).padStart(3, "0")}${o >= 0 ? "+" : "-"}${pad(Math.floor(a / 60))}:${pad(a % 60)}`; }
+const ls = { get(k, d = ""){ try { return localStorage.getItem(k) ?? d; } catch { return d; } }, set(k, v){ try { localStorage.setItem(k, v); } catch {} } };
+const R = d => d * Math.PI / 180;
+const distM = (a, b) => { const x = R(b[2] - a[2]) * Math.cos(R((a[1] + b[1]) / 2)), y = R(b[1] - a[1]); return Math.sqrt(x * x + y * y) * 6371000; };
+const trackDist = t => { let d = 0; for (let i = 1; i < t.points.length; i++) d += distM(t.points[i - 1], t.points[i]); return d; };
+const fmtDist = m => m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(1)}km`;
+const fmtMin = ms => { const m = Math.round(ms / 60000); return m < 60 ? `${m}分` : `${Math.floor(m / 60)}時間${m % 60 ? (m % 60) + "分" : ""}`; };
+const parseNote = n => { const p = String(n || "").split("、"); return p.length === 4 ? { who: p[0], place: p[1], action: p[2], feeling: p[3] } : null; };
+const tracksShown = () => S.tracks.filter(t => !S.user || t.user === S.user);
+const posOf = r => r.gpxLat != null ? { lat: r.gpxLat, lng: r.gpxLng, src: "GPX" } : r.lat != null ? { lat: r.lat, lng: r.lng, src: "端末" } : null;
+
+/* ---------- state ---------- */
+const S = { tracks: [], all: [], range: "today", user: "", group: "", age: "", q: "", shown: 100 };
+
+function period(){
+  const now = Date.now(), t0 = startOfDay(now);
+  if (S.range === "today") return [t0, now + 864e5];
+  if (S.range === "7") return [t0 - 6 * 864e5, now + 864e5];
+  if (S.range === "30") return [t0 - 29 * 864e5, now + 864e5];
+  if (S.range === "custom") {
+    const f = $("#dFrom").value ? new Date($("#dFrom").value + "T00:00").getTime() : 0;
+    const t = $("#dTo").value ? new Date($("#dTo").value + "T00:00").getTime() + 864e5 - 1 : now + 864e5;
+    return [f, t];
+  }
+  return [0, now + 864e5];
+}
+
+async function load(){
+  const [f, t] = period();
+  try {
+    const r = await fetch(`/api/admin/records?from=${f}&to=${Math.round(t)}`, { headers: { "x-admin-key": KEY } });
+    if (r.status === 401 || r.status === 403) { lock((await r.json().catch(() => ({}))).error || "もう一度ログインしてください"); return; }
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    S.all = j.records.filter(x => !x.deleted);
+    try { const tr = await fetch(`/api/admin/tracks?from=${f}&to=${Math.round(t)}`, { headers: { "x-admin-key": KEY } }); if (tr.ok) S.tracks = (await tr.json()).tracks; } catch {}
+    $("#live").classList.remove("off"); $("#liveTxt").textContent = `${hms(Date.now())} に更新`;
+    banner("");
+  } catch (e) {
+    $("#live").classList.add("off"); $("#liveTxt").textContent = "取得できません";
+    banner("データを読み込めませんでした。通信状態を確認して「更新」を押してください。（" + e.message + "）");
+  }
+  renderFilters(); render();
+}
+function banner(m){ const b = $("#banner"); b.textContent = m; b.hidden = !m; }
+
+function filtered(){
+  const q = S.q.trim().toLowerCase();
+  return S.all.filter(r => (!S.user || r.user === S.user) && (!S.group || r.group === S.group) && (!S.age || r.age === S.age)
+    && (!q || (r.note || "").toLowerCase().includes(q) || (r.user || "").toLowerCase().includes(q)));
+}
+
+function renderFilters(){
+  const keep = (id, opts, cur) => { const el = $(id); el.innerHTML = opts; el.value = cur; if (el.value !== cur) { el.value = ""; } };
+  const users = [...new Set(S.all.map(r => r.user))].sort();
+  keep("#fUser", `<option value="">全メンバー</option>` + users.map(u => `<option>${esc(u)}</option>`).join(""), S.user);
+  keep("#fGroup", `<option value="">全グループ</option>` + GROUPS.map(([c, l, i]) => `<option value="${c}">${i} ${l}</option>`).join(""), S.group);
+  keep("#fAge", `<option value="">全年齢</option>` + AGES.map(a => `<option>${a}</option>`).join(""), S.age);
+}
+
+/* ---------- tooltip ---------- */
+const tip = $("#tip");
+function bindTips(root){
+  root.querySelectorAll("[data-tip]").forEach(el => {
+    el.addEventListener("pointerenter", () => { tip.innerHTML = el.dataset.tip; tip.classList.add("show"); el.classList.add("hov"); });
+    el.addEventListener("pointermove", e => {
+      const w = tip.offsetWidth, h = tip.offsetHeight;
+      let x = e.clientX + 14, y = e.clientY - h - 12;
+      if (x + w > innerWidth - 8) x = e.clientX - w - 14;
+      if (y < 8) y = e.clientY + 16;
+      tip.style.left = x + "px"; tip.style.top = y + "px";
+    });
+    el.addEventListener("pointerleave", () => { tip.classList.remove("show"); el.classList.remove("hov"); });
+  });
+}
+
+/* ---------- charts ---------- */
+const SVGNS = 'xmlns="http://www.w3.org/2000/svg"';
+// 下端が角のない、上端だけ丸い棒（縦）
+const vbar = (x, y, w, h, r = 4) => { if (h <= 0) return ""; r = Math.min(r, h, w / 2);
+  return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`; };
+// 左端が角のない、右端だけ丸い棒（横）
+const hbar = (x, y, w, h, r = 4) => { if (w <= 0) return ""; r = Math.min(r, w, h / 2);
+  return `M${x},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h - r}Q${x + w},${y + h} ${x + w - r},${y + h}H${x}Z`; };
+const niceMax = v => { if (v <= 5) return 5; const p = Math.pow(10, Math.floor(Math.log10(v))); for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= v) return m * p; return v; };
+
+function timeChart(rows){
+  const el = $("#cTime");
+  if (!rows.length) { el.innerHTML = `<div class="empty">この条件の記録はまだありません</div>`; return; }
+  const t0 = Math.min(...rows.map(r => r.clientTime)), t1 = Math.max(...rows.map(r => r.clientTime));
+  const span = t1 - t0;
+  // 期間に応じて区切りを変える：2日以内→15分 / 30分 / 1時間、それ以上→1日
+  let step, mode;
+  if (span <= 3 * 3600e3) { step = 15 * 60e3; mode = "min"; }
+  else if (span <= 10 * 3600e3) { step = 30 * 60e3; mode = "min"; }
+  else if (span <= 48 * 3600e3) { step = 3600e3; mode = "min"; }
+  else { step = 864e5; mode = "day"; }
+  const start = mode === "day" ? startOfDay(t0) : Math.floor(t0 / step) * step;
+  const n = Math.max(1, Math.floor(((mode === "day" ? startOfDay(t1) : t1) - start) / step) + 1);
+  const bins = Array.from({ length: n }, (_, i) => ({ t: start + i * step, lo: 0, hi: 0, c: 0 }));
+  for (const r of rows) { const i = Math.min(n - 1, Math.floor((r.clientTime - start) / step)); const b = bins[i]; b.lo += r.countMin; b.hi += r.countMax; b.c++; }
+  $("#timeSub").textContent = `${mode === "day" ? "1日" : step === 3600e3 ? "1時間" : step / 60e3 + "分"}ごと・濃い部分＝最小人数の合計、薄い部分＝最大人数までの幅`;
+
+  const W = Math.max(320, el.clientWidth || 900), H = W < 600 ? 220 : 260, L = 40, R = 8, T = 14, B = 30;
+  const max = niceMax(Math.max(...bins.map(b => b.hi)));
+  const cw = (W - L - R) / n, gap = Math.min(6, cw * 0.25), bw = Math.max(2, cw - gap);
+  const y = v => T + (H - T - B) * (1 - v / max);
+  const ticks = [0, max / 4, max / 2, max * 3 / 4, max].map(v => Math.round(v * 10) / 10);
+  let s = `<svg ${SVGNS} viewBox="0 0 ${W} ${H}" role="img" aria-label="時間帯ごとの観測人数">`;
+  s += ticks.map(v => `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)" stroke-width="1"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" class="num">${v}</text>`).join("");
+  const every = Math.ceil(n / Math.floor((W - L) / 64));
+  bins.forEach((b, i) => {
+    const x = L + i * cw + gap / 2;
+    const lab = mode === "day" ? md(b.t) : hm(b.t);
+    if (i % every === 0) s += `<text x="${x + bw / 2}" y="${H - 10}" text-anchor="middle" class="num">${lab}</text>`;
+    if (!b.c) return;
+    const yHi = y(b.hi), yLo = y(b.lo);
+    s += `<path d="${vbar(x, yHi, bw, y(0) - yHi)}" fill="var(--accent-faint)"/>`;
+    if (b.lo === b.hi) s += `<path d="${vbar(x, yLo, bw, y(0) - yLo)}" fill="var(--accent)"/>`;
+    else if (b.lo > 0) s += `<rect x="${x}" y="${yLo + 1}" width="${bw}" height="${Math.max(0, y(0) - yLo - 1)}" fill="var(--accent)"/>`;
+    const tipTxt = `<b>${mode === "day" ? md(b.t) : `${md(b.t)} ${hm(b.t)}〜${hm(b.t + step)}`}</b><br>観測人数 ${range(b.lo, b.hi)}人<br>記録 ${b.c}件`;
+    s += `<rect x="${L + i * cw}" y="${T}" width="${cw}" height="${H - T - B}" fill="transparent" data-tip="${esc(tipTxt)}"/>`;
+  });
+  s += `<line x1="${L}" x2="${W - R}" y1="${y(0)}" y2="${y(0)}" stroke="var(--line)" stroke-width="1"/></svg>`;
+  el.innerHTML = s; bindTips(el);
+}
+
+function hBars(el, items){
+  // items: [{label, html, n, lo, hi}]
+  if (!items.some(i => i.n)) { el.innerHTML = `<div class="empty">この条件の記録はまだありません</div>`; return; }
+  const W = Math.max(360, el.clientWidth || 520), rowH = 34, L = W < 460 ? 140 : 170, R = 100, VAL = 52, H = items.length * rowH + 4;
+  const max = Math.max(...items.map(i => i.n));
+  let s = `<svg ${SVGNS} viewBox="0 0 ${W} ${H}" role="img">`;
+  items.forEach((it, k) => {
+    const yy = k * rowH + 6, bh = rowH - 14, w = max ? (W - L - R - VAL) * it.n / max : 0;
+    s += `<text x="${L - 10}" y="${yy + bh / 2 + 4}" text-anchor="end" class="lbl">${esc(it.label)}</text>`;
+    s += `<rect x="${L}" y="${yy}" width="${W - L - R - VAL}" height="${bh}" fill="var(--grid)" rx="4" opacity=".55"/>`;
+    if (it.n) s += `<path d="${hbar(L, yy, Math.max(w, 3), bh)}" fill="var(--accent)"/>`;
+    s += `<text x="${L + Math.max(w, 3) + 8}" y="${yy + bh / 2 + 4}" class="val num">${it.n}件</text>`;
+    s += `<text x="${W}" y="${yy + bh / 2 + 4}" text-anchor="end" class="num">${it.n ? range(it.lo, it.hi) + "人" : ""}</text>`;
+    s += `<rect x="0" y="${yy - 5}" width="${W}" height="${rowH}" fill="transparent" data-tip="${esc(`<b>${esc(it.label)}</b><br>記録 ${it.n}件<br>観測人数 ${range(it.lo, it.hi)}人`)}"/>`;
+  });
+  el.innerHTML = s + "</svg>"; bindTips(el);
+}
+function agg(rows, key, keys){
+  const m = Object.fromEntries(keys.map(k => [k, { n: 0, lo: 0, hi: 0 }]));
+  for (const r of rows) { const v = m[r[key]] || (m[r[key]] = { n: 0, lo: 0, hi: 0 }); v.n++; v.lo += r.countMin; v.hi += r.countMax; }
+  return m;
+}
+
+function crossTab(rows){
+  const el = $("#xtab");
+  if (!rows.length) { el.innerHTML = `<div class="empty">この条件の記録はまだありません</div>`; return; }
+  const m = {}; let max = 0;
+  for (const r of rows) { const k = r.group + "|" + r.age; m[k] = (m[k] || 0) + 1; max = Math.max(max, m[k]); }
+  const shade = v => { if (!v) return ""; const t = v / max; const step = t > .8 ? 5 : t > .6 ? 4 : t > .4 ? 3 : t > .2 ? 2 : 1;
+    return `background:var(--seq-${step});color:${step >= 4 ? "var(--accent-ink)" : "var(--ink)"}`; };
+  const groups = GROUPS.filter(([c]) => rows.some(r => r.group === c));
+  const extra = [...new Set(rows.map(r => r.group))].filter(c => !G[c]);
+  let h = `<table class="xt"><thead><tr><th>グループ ＼ 年齢層</th>${AGES.map(a => `<th class="num">${a}</th>`).join("")}<th>合計</th></tr></thead><tbody>`;
+  for (const c of [...groups.map(g => g[0]), ...extra]) {
+    const gi = gInfo(c); let tot = 0;
+    h += `<tr><td><span class="emo">${gi.icon}</span> ${esc(gi.label)}</td>` + AGES.map(a => { const v = m[c + "|" + a] || 0; tot += v;
+      return `<td class="c num" style="${shade(v)}">${v || "·"}</td>`; }).join("") + `<td class="num"><b>${tot}</b></td></tr>`;
+  }
+  h += `<tr><td><b>合計</b></td>` + AGES.map(a => `<td class="num"><b>${rows.filter(r => r.age === a).length}</b></td>`).join("") + `<td class="num"><b>${rows.length}</b></td></tr>`;
+  el.innerHTML = h + "</tbody></table>";
+}
+
+function memberTable(rows){
+  const el = $("#members");
+  if (!rows.length && !tracksShown().length) { el.innerHTML = `<div class="empty">この条件の記録はまだありません</div>`; return; }
+  const m = {};
+  for (const r of rows) { const v = m[r.user] || (m[r.user] = { n: 0, lo: 0, hi: 0, first: Infinity, last: 0, gpx: 0, dev: 0 });
+    v.n++; v.lo += r.countMin; v.hi += r.countMax; v.first = Math.min(v.first, r.clientTime); v.last = Math.max(v.last, r.clientTime);
+    if (r.gpxLat != null) v.gpx++; else if (r.lat != null) v.dev++; }
+  const tr = {};
+  for (const t of tracksShown()) { const v = tr[t.user] || (tr[t.user] = { n: 0, ms: 0, d: 0 }); v.n++; v.ms += (t.endedAt || t.updatedAt) - t.startedAt; v.d += trackDist(t); }
+  for (const u of Object.keys(tr)) if (!m[u]) m[u] = { n: 0, lo: 0, hi: 0, first: Infinity, last: 0, gpx: 0, dev: 0 };
+  const list = Object.entries(m).sort((a, b) => b[1].n - a[1].n);
+  el.innerHTML = `<table><thead><tr><th>メンバー</th><th class="r">記録</th><th class="r">人数</th><th>最初〜最後</th><th>位置</th><th>軌跡</th></tr></thead><tbody>` +
+    list.map(([u, v]) => { const none = v.n - v.gpx - v.dev;
+      return `<tr><td><b>${esc(u)}</b></td><td class="r num">${v.n}</td><td class="r num">${range(v.lo, v.hi)}</td><td class="num">${v.n ? `${hm(v.first)}〜${hm(v.last)}` : "–"}</td>
+      <td>${v.gpx ? `<span class="tag">GPX ${v.gpx}</span> ` : ""}${v.dev ? `<span class="tag">端末 ${v.dev}</span> ` : ""}${none ? `<span class="tag warn">なし ${none}</span>` : ""}</td>
+      <td class="num">${tr[u] ? `${tr[u].n}本・${fmtMin(tr[u].ms)}・${fmtDist(tr[u].d)}` : `<span class="tag warn">なし</span>`}</td></tr>`; }).join("") +
+    `</tbody></table>`;
+}
+
+let map, layer;
+function mapView(rows){
+  if (!window.L) { $("#map").innerHTML = `<div class="empty">地図を読み込めませんでした</div>`; return; }
+  if (!map) {
+    map = L.map("map").setView([35.787, 139.903], 13);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap" }).addTo(map);
+    layer = L.layerGroup().addTo(map);
+  }
+  layer.clearLayers(); const pts = [];
+  for (const t of tracksShown()) { const ll = t.points.map(p => [p[1], p[2]]); if (ll.length < 2) continue;
+    L.polyline(ll, { color: cssv("--accent"), weight: 3, opacity: .6 })
+      .bindPopup(`<b>${esc(t.user)}</b> の軌跡<br>${md(t.startedAt)} ${hm(t.startedAt)}〜${t.endedAt ? hm(t.endedAt) : "記録中"}<br>${fmtDist(trackDist(t))}・${t.points.length}地点`).addTo(layer);
+    pts.push(...ll); }
+  for (const r of rows) { const p = posOf(r); if (!p) continue; const gi = gInfo(r.group);
+    L.circleMarker([p.lat, p.lng], { radius: 5 + Math.min(r.countMax, 30) / 3, color: cssv("--surface") || "#fff", weight: 2, fillColor: cssv(gi.color), fillOpacity: .9 })
+      .bindPopup(`<b>${md(r.clientTime)} ${hms(r.clientTime)}</b>　${esc(r.user)}<br>${gi.icon} ${esc(gi.label)}・${esc(r.age)}・${range(r.countMin, r.countMax)}人${r.note ? `<br>${esc(r.note)}` : ""}<br><span style="color:#888">位置：${p.src}</span>`)
+      .addTo(layer); pts.push([p.lat, p.lng]); }
+  if (pts.length) map.fitBounds(pts, { padding: [24, 24], maxZoom: 18 });
+  $("#mapLegend").innerHTML = GROUPS.filter(([c]) => c.length === 2).map(([c, l, i, v]) => `<span><i style="background:var(${v});border-radius:50%"></i><span class="emo">${i}</span> ${l}</span>`).join("") + `<span>（1人の記録も同じ色）</span><span><i style="background:var(--accent);height:3px;border-radius:2px"></i>軌跡</span>`;
+  setTimeout(() => map.invalidateSize(), 50);
+}
+
+const ICON_DEL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>';
+function listView(rows){
+  const el = $("#list"), sorted = [...rows].sort((a, b) => b.clientTime - a.clientTime), show = sorted.slice(0, S.shown);
+  $("#listSub").textContent = `${rows.length}件中 ${show.length}件を表示（新しい順）`;
+  $("#moreBtn").hidden = rows.length <= S.shown;
+  if (!rows.length) { el.innerHTML = `<div class="empty">この条件の記録はまだありません</div>`; return; }
+  el.innerHTML = `<table><thead><tr><th>日時</th><th>メンバー</th><th>グループ</th><th>年齢</th><th class="r">人数</th><th>定型文（誰、どこ、何してる、感情）</th><th>位置</th><th></th></tr></thead><tbody>` +
+    show.map(r => { const gi = gInfo(r.group), p = posOf(r);
+      return `<tr><td class="num" style="white-space:nowrap">${md(r.clientTime)} ${hms(r.clientTime)}</td><td>${esc(r.user)}</td>
+      <td><span class="chip" style="--c:${gi.color}"><span class="emo">${gi.icon}</span>${esc(gi.label)}</span></td><td class="num">${esc(r.age)}</td>
+      <td class="r num">${range(r.countMin, r.countMax)}</td><td class="note">${esc(r.note)}</td>
+      <td>${p ? `<span class="tag">${p.src}${r.gpxDiffSec != null && p.src === "GPX" ? ` ±${r.gpxDiffSec}秒` : ""}</span>` : `<span class="tag warn">なし</span>`}</td>
+      <td><button class="del" data-del="${esc(r.id)}" type="button" aria-label="この記録を削除" title="削除（管理用パスワードが必要）">${ICON_DEL}</button></td></tr>`; }).join("") + `</tbody></table>`;
+}
+$("#list").addEventListener("click", async e => {
+  const b = e.target.closest("[data-del]"); if (!b) return;
+  const r = S.all.find(x => x.id === b.dataset.del);
+  if (!r || !confirm(`${md(r.clientTime)} ${hms(r.clientTime)}（${r.user}）の記録を削除しますか？\nみんなのアプリからも消えます。`)) return;
+  const res = await fetch(`/api/admin/records/${encodeURIComponent(r.id)}`, { method: "DELETE", headers: { "x-admin-key": KEY } });
+  const j = await res.json().catch(() => ({}));
+  if (res.status === 401 || res.status === 403) { lock(j.error || "もう一度ログインしてください"); return; }
+  if (!res.ok) { banner("削除できませんでした：" + (j.error || res.status)); return; }
+  banner(""); S.all = S.all.filter(x => x.id !== r.id); render();
+});
+
+/* ---------- KPI ---------- */
+function kpis(rows){
+  const lo = rows.reduce((s, r) => s + r.countMin, 0), hi = rows.reduce((s, r) => s + r.countMax, 0);
+  const users = new Set(rows.map(r => r.user)), withPos = rows.filter(r => posOf(r)).length, gpx = rows.filter(r => r.gpxLat != null).length;
+  $("#kN").textContent = rows.length;
+  $("#kNs").textContent = rows.length ? `${md(Math.min(...rows.map(r => r.clientTime)))}〜` : " ";
+  $("#kP").textContent = rows.length ? range(lo, hi) : "0";
+  $("#kU").textContent = users.size;
+  $("#kUs").textContent = users.size ? `1人あたり平均 ${(rows.length / users.size).toFixed(1)}件` : " ";
+  $("#kG").textContent = rows.length ? `${Math.round(withPos / rows.length * 100)}%` : "–";
+  $("#kGs").textContent = rows.length ? `GPX ${gpx}件・端末 ${withPos - gpx}件` : " ";
+  const last = rows.reduce((m, r) => r.clientTime > (m?.clientTime ?? 0) ? r : m, null);
+  $("#kL").textContent = last ? hm(last.clientTime) : "–";
+  $("#kLs").textContent = last ? `${md(last.clientTime)}・${last.user}` : " ";
+}
+
+function render(){
+  const rows = filtered();
+  kpis(rows);
+  timeChart(rows);
+  const ga = agg(rows, "group", GROUPS.map(g => g[0]));
+  hBars($("#cGroup"), GROUPS.map(([c, l, i]) => ({ label: `${i} ${l}`, ...ga[c] })).concat(Object.keys(ga).filter(c => !G[c]).map(c => ({ label: gInfo(c).label, ...ga[c] }))));
+  const aa = agg(rows, "age", AGES);
+  hBars($("#cAge"), AGES.map(a => ({ label: a, ...aa[a] })));
+  crossTab(rows); memberTable(rows); mapView(rows); listView(rows);
+}
+
+/* ---------- CSV ---------- */
+$("#csv").addEventListener("click", () => {
+  const rows = [...filtered()].sort((a, b) => a.clientTime - b.clientTime);
+  const cols = ["id","user","datetime_local","epoch_ms","age","group","group_label","gender","count_min","count_max","note","who","place","action","feeling","device_lat","device_lng","device_acc_m","gpx_lat","gpx_lng","gpx_diff_sec","gpx_file","server_time"];
+  const q = v => { const s = v == null ? "" : String(v); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const body = rows.map(r => [r.id, r.user, localISO(r.clientTime), r.clientTime, r.age, r.group, gInfo(r.group).label, r.gender, r.countMin, r.countMax, r.note, ...(() => { const p = parseNote(r.note) || {}; return [p.who, p.place, p.action, p.feeling]; })(),
+    r.lat, r.lng, r.acc, r.gpxLat, r.gpxLng, r.gpxDiffSec, r.gpxFile, r.serverTime ? localISO(r.serverTime) : ""].map(q).join(","));
+  const blob = new Blob(["﻿" + [cols.join(","), ...body].join("\r\n")], { type: "text/csv" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `observations_${ymd(Date.now())}.csv`; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+});
+
+/* ---------- ルートヒストリーのGPXを結合 ---------- */
+const GX = { files: [], matches: new Map() };
+function parseGPX(text){
+  const x = new DOMParser().parseFromString(text, "application/xml");
+  if (x.getElementsByTagName("parsererror").length) throw new Error("GPXを読み込めません");
+  return [...x.getElementsByTagName("trkpt"), ...x.getElementsByTagName("rtept")].map(p => ({
+    lat: +p.getAttribute("lat"), lng: +p.getAttribute("lon"), t: Date.parse(p.getElementsByTagName("time")[0]?.textContent || "") }))
+    .filter(p => isFinite(p.lat) && isFinite(p.lng) && isFinite(p.t)).sort((a, b) => a.t - b.t);
+}
+function locate(pts, T, gap){
+  let lo = 0, hi = pts.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (pts[m].t < T) lo = m + 1; else hi = m; }
+  const n = pts[lo], p = pts[lo - 1];
+  if (p && n && T - p.t <= gap && n.t - T <= gap) {
+    const k = n.t === p.t ? 0 : (T - p.t) / (n.t - p.t);
+    return { lat: p.lat + (n.lat - p.lat) * k, lng: p.lng + (n.lng - p.lng) * k, diff: Math.min(T - p.t, n.t - T) / 1000, interp: true };
+  }
+  const c = [p, n].filter(Boolean).sort((a, b) => Math.abs(a.t - T) - Math.abs(b.t - T))[0];
+  return c && Math.abs(c.t - T) <= gap ? { lat: c.lat, lng: c.lng, diff: Math.abs(c.t - T) / 1000, interp: false } : null;
+}
+async function adminRecords(from, to){
+  const r = await fetch(`/api/admin/records?from=${Math.floor(from)}&to=${Math.ceil(to)}`, { headers: { "x-admin-key": KEY } });
+  if (r.status === 401 || r.status === 403) { lock("もう一度ログインしてください"); throw new Error("auth"); }
+  return (await r.json()).records;
+}
+function renderGpxFiles(){
+  const users = [...new Set([...S.all.map(r => r.user), ...GX.files.map(f => f.user).filter(Boolean)])].sort();
+  $("#gpxList").innerHTML = GX.files.map((f, i) => {
+    const a = f.pts[0].t, b = f.pts[f.pts.length - 1].t;
+    return `<div class="gpxf"><div class="n">${esc(f.name)}</div>
+      <select class="sel" data-gi="${i}" aria-label="誰のGPXか"><option value="">誰のGPX？</option>${users.map(u => `<option ${u === f.user ? "selected" : ""}>${esc(u)}</option>`).join("")}</select>
+      <div class="s num">${f.pts.length}地点・${md(a)} ${hm(a)}〜${hm(b)}</div>
+      ${f.result ? `<div class="r ${f.result.bad ? "bad" : ""}">${esc(f.result.text)}</div>` : ""}</div>`;
+  }).join("");
+  $$("#gpxList select").forEach(el => el.onchange = () => { GX.files[+el.dataset.gi].user = el.value; GX.files[+el.dataset.gi].result = null; $("#gpxSave").hidden = true; syncGpxBtns(); });
+  syncGpxBtns();
+}
+const syncGpxBtns = () => { $("#gpxRun").disabled = !GX.files.some(f => f.user); };
+$("#gpxIn").addEventListener("change", async e => {
+  // 全メンバーの名前（GPXの期間に関係なく割り当てられるよう、全期間の名前を集める）
+  let names = S.all.map(r => r.user);
+  try { names = [...new Set((await adminRecords(0, Date.now() + 864e5)).map(r => r.user))]; } catch {}
+  for (const file of e.target.files) {
+    try {
+      const pts = parseGPX(await file.text());
+      if (pts.length < 2) { banner(`${file.name}：時刻付きの地点がありません`); continue; }
+      const stem = file.name.replace(/\.[^.]+$/, "").toLowerCase();
+      const user = names.find(u => { const l = u.toLowerCase(); return stem === l || stem.startsWith(l + "_") || stem.startsWith(l + "-") || stem.startsWith(l + " "); }) || "";
+      GX.files.push({ name: file.name, pts, user, result: null });
+    } catch (err) { banner(`${file.name}：${err.message}`); }
+  }
+  e.target.value = ""; $("#gpxSave").hidden = true; renderGpxFiles();
+});
+$("#gpxRun").addEventListener("click", async () => {
+  const gap = +$("#gpxGap").value * 1000; GX.matches.clear(); $("#gpxRun").disabled = true;
+  try {
+    for (const f of GX.files) {
+      if (!f.user) { f.result = { text: "誰のGPXかを選んでください", bad: true }; continue; }
+      const recs = (await adminRecords(f.pts[0].t - gap, f.pts[f.pts.length - 1].t + gap)).filter(r => r.user === f.user);
+      let ok = 0, sum = 0;
+      for (const r of recs) { const m = locate(f.pts, r.clientTime, gap); if (!m) continue; ok++; sum += m.diff;
+        GX.matches.set(r.id, { id: r.id, gpxLat: +m.lat.toFixed(7), gpxLng: +m.lng.toFixed(7), gpxDiffSec: +m.diff.toFixed(1), gpxInterp: m.interp, gpxFile: f.name }); }
+      f.result = recs.length ? { text: `${f.user} の記録 ${recs.length}件中 ${ok}件に位置を結合${ok ? `（平均の時間差 ${(sum / ok).toFixed(1)}秒）` : ""}・軌跡も保存します`, bad: !ok }
+                             : { text: `${f.user} のこの時間帯の記録はありません（軌跡だけ保存します）`, bad: true };
+    }
+    $("#gpxSave").hidden = !GX.files.some(f => f.user);
+  } catch (e) { if (e.message !== "auth") banner("結合できませんでした：" + e.message); }
+  renderGpxFiles();
+});
+$("#gpxSave").addEventListener("click", async () => {
+  const b = $("#gpxSave"); b.disabled = true;
+  try {
+    const items = [...GX.matches.values()];
+    if (items.length) { const r = await fetch("/api/records/gpx", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ items }) }); if (!r.ok) throw new Error("HTTP " + r.status); }
+    let n = 0;
+    for (const f of GX.files.filter(f => f.user)) {
+      const r = await fetch("/api/tracks/import", { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ user: f.user, file: f.name, points: f.pts.map(p => [p.t, p.lat, p.lng]) }) });
+      if (r.ok) n++;
+    }
+    banner(""); b.hidden = true;
+    GX.files = []; GX.matches.clear(); $("#gpxList").innerHTML = `<div class="gpxf"><div class="r">保存しました：位置 ${items.length}件・軌跡 ${n}本</div></div>`; syncGpxBtns();
+    await load();
+  } catch (e) { banner("保存できませんでした：" + e.message); }
+  b.disabled = false;
+});
+
+/* ---------- 軌跡をGPXで書き出す ---------- */
+$("#gpxOut").addEventListener("click", () => {
+  const list = tracksShown().filter(t => t.points.length);
+  if (!list.length) { banner("この条件の軌跡はありません"); return; }
+  const iso = ms => new Date(ms).toISOString();
+  const x = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="seminar-fieldlog" xmlns="http://www.topografix.com/GPX/1/1">\n` +
+    list.map(t => `<trk><name>${esc(t.user)} ${localISO(t.startedAt)}</name><trkseg>\n` +
+      t.points.map(p => `<trkpt lat="${p[1]}" lon="${p[2]}"><time>${iso(p[0])}</time></trkpt>`).join("\n") + `\n</trkseg></trk>`).join("\n") + `\n</gpx>\n`;
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([x], { type: "application/gpx+xml" }));
+  a.download = `tracks_${ymd(Date.now())}.gpx`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  banner("");
+});
+
+/* ---------- wiring ---------- */
+$("#range").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return;
+  $$("#range button").forEach(x => x.classList.toggle("on", x === b)); S.range = b.dataset.v;
+  $("#custom").classList.toggle("show", S.range === "custom"); S.shown = 100; load(); });
+["#dFrom", "#dTo"].forEach(id => $(id).addEventListener("change", load));
+$("#fUser").onchange = e => { S.user = e.target.value; S.shown = 100; render(); };
+$("#fGroup").onchange = e => { S.group = e.target.value; S.shown = 100; render(); };
+$("#fAge").onchange = e => { S.age = e.target.value; S.shown = 100; render(); };
+let qT; $("#q").oninput = e => { clearTimeout(qT); qT = setTimeout(() => { S.q = e.target.value; S.shown = 100; render(); }, 200); };
+$("#moreBtn").onclick = () => { S.shown += 200; listView(filtered()); };
+$("#reload").onclick = load;
+let rT; addEventListener("resize", () => { clearTimeout(rT); rT = setTimeout(render, 150); });
+$("#dFrom").value = $("#dTo").value = ymd(Date.now());
+
+/* ---------- ログイン ---------- */
+let KEY = "", timer = null;
+function lock(msg){
+  KEY = ""; try { sessionStorage.removeItem("fl-admin-key"); } catch {}
+  clearInterval(timer); S.all = [];
+  document.body.classList.add("locked"); $("#gate").hidden = false;
+  $("#gateErr").textContent = msg || ""; $("#gateErr").hidden = !msg;
+  setTimeout(() => $("#gateKey").focus(), 50);
+}
+async function unlock(key){
+  $("#gateBtn").disabled = true; $("#gateErr").hidden = true;
+  try {
+    const r = await fetch("/api/admin/check", { method: "POST", headers: { "x-admin-key": key } });
+    const j = await r.json().catch(() => ({}));
+    if (r.status === 403) { lock("サーバーに管理用パスワード（ADMIN_KEY）がまだ設定されていません。設定したあと、もう一度公開（deploy）してください。"); return; }
+    if (!r.ok) { lock(j.error || "管理用パスワードが違います"); return; }
+    KEY = key; try { sessionStorage.setItem("fl-admin-key", key); } catch {}
+    $("#gate").hidden = true; document.body.classList.remove("locked"); $("#gateKey").value = "";
+    await load();
+    clearInterval(timer); timer = setInterval(() => { if (!document.hidden) load(); }, 20000);   // 20秒ごとに自動更新
+  } catch { lock("サーバーにつながりません。通信状態を確認してください。"); }
+  finally { $("#gateBtn").disabled = false; }
+}
+$("#gateForm").addEventListener("submit", e => { e.preventDefault(); const k = $("#gateKey").value.trim(); if (k) unlock(k); });
+$("#logout").onclick = () => lock("");
+{ let saved = ""; try { saved = sessionStorage.getItem("fl-admin-key") || ""; } catch {} saved ? unlock(saved) : lock(""); }
+</script>
+</body>
+</html>
